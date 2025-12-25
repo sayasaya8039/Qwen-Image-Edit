@@ -54,7 +54,7 @@ if exist "%INSTALL_DIR%" (
     git pull
 ) else (
     echo Cloning repository...
-    git clone https://github.com/your-repo/Qwen-Image-Edit-2511.git "%INSTALL_DIR%"
+    git clone https://github.com/sayasaya8039/Qwen-Image-Edit.git "%INSTALL_DIR%"
     cd /d "%INSTALL_DIR%"
 )
 

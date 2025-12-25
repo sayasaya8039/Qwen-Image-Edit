@@ -15,7 +15,7 @@ if not exist "python\server.py" (
         echo.
         echo Please either:
         echo   1. Clone the repository first:
-        echo      git clone https://github.com/your-repo/Qwen-Image-Edit-2511.git
+        echo      git clone https://github.com/sayasaya8039/Qwen-Image-Edit.git
         echo      cd Qwen-Image-Edit-2511
         echo.
         echo   2. Or download and extract the project, then run this script from there.
