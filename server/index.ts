@@ -219,8 +219,8 @@ app.get('/api/status', async (c) => {
 // 利用可能なモデル一覧（認証不要）
 app.get('/api/models', (c) => {
   try {
-    // クラウドモデルのみ返す（フロントエンドで選択可能なもの）
-    const models = getAllModels().filter((m) => m.enabled && m.type === 'cloud')
+    // 有効なモデルをすべて返す（cloud + local）
+    const models = getAllModels().filter((m) => m.enabled)
     // デフォルトモデルを設定（最初のモデルをデフォルトに）
     if (models.length > 0 && !models.some((m) => m.isDefault)) {
       models[0].isDefault = true
