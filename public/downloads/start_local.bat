@@ -63,11 +63,20 @@ goto menu
 echo.
 echo Installing dependencies...
 echo.
+
+:: Clean up any existing broken node_modules
+if exist "node_modules" (
+    echo Cleaning up old node_modules...
+    rmdir /s /q node_modules 2>nul
+)
+
 echo [1/3] Installing Node.js packages...
-call npm install
+call npm install --legacy-peer-deps --ignore-scripts
 if %ERRORLEVEL% neq 0 (
-    echo [WARNING] npm install failed, trying with --legacy-peer-deps
-    call npm install --legacy-peer-deps
+    echo [WARNING] npm install failed
+    echo Trying alternative method...
+    call npm cache clean --force
+    call npm install --legacy-peer-deps --ignore-scripts
 )
 echo.
 echo [2/3] Creating Python virtual environment...
@@ -75,6 +84,7 @@ if not exist "venv" python -m venv venv
 call venv\Scripts\activate.bat
 echo.
 echo [3/3] Installing Python packages (this may take a while)...
+pip install --upgrade pip
 pip install -r python/requirements.txt
 echo.
 echo [OK] Installation complete!
