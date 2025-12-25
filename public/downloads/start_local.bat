@@ -16,7 +16,7 @@ if not exist "python\server.py" (
         echo Please either:
         echo   1. Clone the repository first:
         echo      git clone https://github.com/sayasaya8039/Qwen-Image-Edit.git
-        echo      cd Qwen-Image-Edit-2511
+        echo      cd Qwen-Image-Edit
         echo.
         echo   2. Or download and extract the project, then run this script from there.
         echo.
@@ -30,6 +30,9 @@ if not exist "python\server.py" (
 echo [OK] Project directory detected
 echo.
 
+:: Store current directory
+set "PROJECT_DIR=%CD%"
+
 :menu
 echo Select server to start:
 echo.
@@ -39,7 +42,7 @@ echo   [3] Z-Image-Turbo              - Port 3003
 echo   [4] Real-ESRGAN (Upscale)      - Port 3004
 echo   [5] FLUX.2 [dev]               - Port 3005
 echo   [6] Frontend + API Server
-echo   [7] Start All
+echo   [7] Start All (in new windows)
 echo   [8] Install Dependencies
 echo   [0] Exit
 echo.
@@ -62,12 +65,16 @@ echo Installing dependencies...
 echo.
 echo [1/3] Installing Node.js packages...
 call npm install
+if %ERRORLEVEL% neq 0 (
+    echo [WARNING] npm install failed, trying with --legacy-peer-deps
+    call npm install --legacy-peer-deps
+)
 echo.
 echo [2/3] Creating Python virtual environment...
 if not exist "venv" python -m venv venv
 call venv\Scripts\activate.bat
 echo.
-echo [3/3] Installing Python packages...
+echo [3/3] Installing Python packages (this may take a while)...
 pip install -r python/requirements.txt
 echo.
 echo [OK] Installation complete!
@@ -77,39 +84,36 @@ goto menu
 
 :qwen
 echo Starting Qwen-Image-Edit server...
-if exist "venv\Scripts\activate.bat" call venv\Scripts\activate.bat
-start "Qwen Server" cmd /k "cd /d %CD% && python python/server.py --port 8000"
+echo (Press Ctrl+C to stop, then type 'exit' to return to menu)
+echo.
+start "Qwen Server" cmd /k "cd /d %PROJECT_DIR% && call venv\Scripts\activate.bat && python python/server.py --port 8000"
 goto menu
 
 :bagel
 echo Starting BAGEL server...
-if exist "venv\Scripts\activate.bat" call venv\Scripts\activate.bat
-start "BAGEL Server" cmd /k "cd /d %CD% && python python/bagel_server.py --port 3002"
+start "BAGEL Server" cmd /k "cd /d %PROJECT_DIR% && call venv\Scripts\activate.bat && python python/bagel_server.py --port 3002"
 goto menu
 
 :zimage
 echo Starting Z-Image-Turbo server...
-if exist "venv\Scripts\activate.bat" call venv\Scripts\activate.bat
-start "Z-Image Server" cmd /k "cd /d %CD% && python python/zimage_server.py --port 3003"
+start "Z-Image Server" cmd /k "cd /d %PROJECT_DIR% && call venv\Scripts\activate.bat && python python/zimage_server.py --port 3003"
 goto menu
 
 :upscale
 echo Starting Upscale server...
-if exist "venv\Scripts\activate.bat" call venv\Scripts\activate.bat
-start "Upscale Server" cmd /k "cd /d %CD% && python python/upscale_server.py --port 3004"
+start "Upscale Server" cmd /k "cd /d %PROJECT_DIR% && call venv\Scripts\activate.bat && python python/upscale_server.py --port 3004"
 goto menu
 
 :flux2
 echo Starting FLUX.2 server...
-if exist "venv\Scripts\activate.bat" call venv\Scripts\activate.bat
-start "FLUX.2 Server" cmd /k "cd /d %CD% && python python/flux2_server.py --port 3005"
+start "FLUX.2 Server" cmd /k "cd /d %PROJECT_DIR% && call venv\Scripts\activate.bat && python python/flux2_server.py --port 3005"
 goto menu
 
 :frontend
 echo Starting Frontend + API server...
-start "API Server" cmd /k "cd /d %CD% && npm run server"
+start "API Server" cmd /k "cd /d %PROJECT_DIR% && npm run server"
 timeout /t 2 >nul
-start "Frontend" cmd /k "cd /d %CD% && npm run dev"
+start "Frontend" cmd /k "cd /d %PROJECT_DIR% && npm run dev"
 echo.
 echo ----------------------------------------
 echo   Frontend: http://localhost:5173
@@ -119,16 +123,29 @@ goto menu
 
 :all
 echo Starting all servers...
-if exist "venv\Scripts\activate.bat" call venv\Scripts\activate.bat
-start "Qwen Server" cmd /k "cd /d %CD% && python python/server.py --port 8000"
-start "API Server" cmd /k "cd /d %CD% && npm run server"
+echo.
+:: Start Qwen server with venv
+start "Qwen Server" cmd /k "cd /d %PROJECT_DIR% && call venv\Scripts\activate.bat && python python/server.py --port 8000"
+echo   [+] Qwen-Image-Edit started (port 8000)
+
+:: Start API server
+start "API Server" cmd /k "cd /d %PROJECT_DIR% && npm run server"
+echo   [+] API server started (port 3001)
+
 timeout /t 2 >nul
-start "Frontend" cmd /k "cd /d %CD% && npm run dev"
+
+:: Start Frontend
+start "Frontend" cmd /k "cd /d %PROJECT_DIR% && npm run dev"
+echo   [+] Frontend started (port 5173)
+
 echo.
 echo ----------------------------------------
 echo   All servers started!
 echo   Frontend: http://localhost:5173
 echo ----------------------------------------
+echo.
+echo Close all server windows to stop.
+echo.
 goto menu
 
 :end
