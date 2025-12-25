@@ -1,0 +1,42 @@
+# Qwen-Image-Edit-2511 Dependencies
+
+# Core ML
+torch>=2.0.0
+torchvision>=0.15.0
+diffusers @ git+https://github.com/huggingface/diffusers
+transformers>=4.40.0
+accelerate>=0.28.0
+safetensors>=0.4.0
+
+# ONNX Runtime for DirectML (AMD/Intel GPU)
+onnxruntime-directml>=1.16.0; sys_platform == 'win32'
+optimum>=1.17.0
+
+# Image processing
+pillow>=10.0.0
+
+# API Server
+fastapi>=0.111.0
+uvicorn>=0.29.0
+python-multipart>=0.0.9
+
+# ============================================
+# BAGEL-7B-MoT Dependencies (optional)
+# Requires Python 3.10, CUDA, 12GB+ VRAM
+# ============================================
+# flash-attn>=2.5.8  # CUDA only, install separately
+# bitsandbytes>=0.43.0  # For INT8/NF4 quantization
+# bagel @ git+https://github.com/ByteDance-Seed/BAGEL.git
+
+# ============================================
+# Z-Image-Turbo Dependencies (optional)
+# Requires CUDA, 16GB+ VRAM recommended
+# ============================================
+# diffusers @ git+https://github.com/huggingface/diffusers  # For ZImagePipeline
+
+# ============================================
+# Super-Resolution / Upscale Dependencies
+# ============================================
+# realesrgan>=0.3.0
+# basicsr>=1.4.2
+# gfpgan>=1.3.8  # Optional: for face enhancement

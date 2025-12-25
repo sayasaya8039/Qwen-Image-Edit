@@ -1,0 +1,37 @@
+# BAGEL-7B-MoT Dependencies
+# Requirements: Python 3.10, CUDA 11.8+, 12GB+ VRAM
+#
+# Installation:
+# 1. Create conda environment:
+#    conda create -n bagel python=3.10
+#    conda activate bagel
+#
+# 2. Install PyTorch with CUDA:
+#    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+#
+# 3. Install flash-attn (CUDA required):
+#    pip install flash-attn==2.5.8 --no-build-isolation
+#
+# 4. Install this requirements file:
+#    pip install -r requirements-bagel.txt
+
+# Core ML
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.40.0
+accelerate>=0.28.0
+safetensors>=0.4.0
+
+# Quantization support
+bitsandbytes>=0.43.0
+
+# BAGEL model
+bagel @ git+https://github.com/ByteDance-Seed/BAGEL.git
+
+# Image processing
+pillow>=10.0.0
+
+# API Server
+fastapi>=0.111.0
+uvicorn>=0.29.0
+python-multipart>=0.0.9

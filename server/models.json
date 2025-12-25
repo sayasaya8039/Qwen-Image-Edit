@@ -1,0 +1,89 @@
+{
+  "models": [
+    {
+      "id": "qwen-image-edit",
+      "name": "Qwen-Image-Edit-2511",
+      "type": "diffusers",
+      "source": "Qwen/Qwen-Image-Edit-2511",
+      "description": "Qwenの画像編集モデル（CUDA対応）",
+      "backends": ["cuda", "cpu"],
+      "isDefault": true,
+      "enabled": true,
+      "createdAt": "2025-01-01T00:00:00Z"
+    },
+    {
+      "id": "stable-diffusion-v1-5",
+      "name": "Stable Diffusion 1.5",
+      "type": "onnx",
+      "source": "runwayml/stable-diffusion-v1-5",
+      "description": "Stable Diffusion 1.5（DirectML対応）",
+      "backends": ["directml", "cuda", "cpu"],
+      "isDefault": false,
+      "enabled": true,
+      "createdAt": "2025-01-01T00:00:00Z"
+    },
+    {
+      "id": "huggingface-cloud",
+      "name": "HuggingFace Cloud (Qwen)",
+      "type": "cloud",
+      "source": "https://qwen-qwen-image-edit-2511.hf.space",
+      "description": "Qwen-Image-Edit-2511 (HuggingFace Spaces)",
+      "backends": ["cloud"],
+      "isDefault": false,
+      "enabled": true,
+      "createdAt": "2025-01-01T00:00:00Z"
+    },
+    {
+      "id": "bagel-7b-mot",
+      "name": "BAGEL-7B-MoT",
+      "type": "cloud",
+      "source": "https://bytedance-seed-bagel.hf.space",
+      "description": "ByteDance BAGEL - 統合マルチモーダルモデル（画像生成・編集・理解、CUDA対応）",
+      "backends": ["cuda", "cloud"],
+      "capabilities": ["text-to-image", "image-edit", "image-understanding"],
+      "isDefault": false,
+      "enabled": true,
+      "createdAt": "2025-01-01T00:00:00Z"
+    },
+    {
+      "id": "z-image-turbo",
+      "name": "Z-Image-Turbo",
+      "type": "cloud",
+      "source": "https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo",
+      "description": "Tongyi 高速・高品質テキストから画像生成（16GB VRAM、CUDA対応）",
+      "backends": ["cuda", "cloud"],
+      "capabilities": ["text-to-image"],
+      "isDefault": false,
+      "enabled": true,
+      "createdAt": "2025-01-01T00:00:00Z"
+    },
+    {
+      "id": "real-esrgan",
+      "name": "Real-ESRGAN x4",
+      "type": "local",
+      "source": "xinntao/Real-ESRGAN",
+      "description": "超解像度 - 画像を4倍にアップスケール（CUDA/CPU対応）",
+      "backends": ["cuda", "cpu"],
+      "capabilities": ["upscale"],
+      "isDefault": false,
+      "enabled": true,
+      "createdAt": "2025-01-01T00:00:00Z"
+    },
+    {
+      "id": "flux2-dev",
+      "name": "FLUX.2 [dev]",
+      "type": "cloud",
+      "source": "https://black-forest-labs-flux-2-dev.hf.space",
+      "description": "Black Forest Labs FLUX.2 - 32B最先端画像生成・編集モデル（CUDA対応）",
+      "backends": ["cuda", "cloud"],
+      "capabilities": ["text-to-image", "image-edit"],
+      "isDefault": false,
+      "enabled": true,
+      "createdAt": "2025-01-01T00:00:00Z"
+    }
+  ],
+  "settings": {
+    "activeModelId": "qwen-image-edit",
+    "fallbackToCloud": true
+  }
+}
