@@ -307,6 +307,26 @@ app.post('/api/generate', async (c) => {
         result = await callFlux2CloudAPI(prompt, image1)
         usedBackend = 'flux2-cloud'
       }
+    } else if (modelId === 'real-esrgan-ncnn') {
+      // Real-ESRGAN ncnn Vulkan (超解像度)
+      if (!image1) {
+        return c.json({ error: true, message: '超解像度には入力画像が必要です' }, 400)
+      }
+      result = await callNcnnUpscaleAPI(image1)
+      usedBackend = 'ncnn-vulkan'
+    } else if (modelId === 'stable-diffusion-onnx-fp16') {
+      // Stable Diffusion ONNX FP16 (DirectML)
+      result = await callOnnxSDAPI(prompt, negativePrompt, image1)
+      usedBackend = 'onnx-sd'
+    } else if (modelId === 'flux1-dev-onnx' || modelId === 'flux1-schnell-onnx') {
+      // FLUX.1 ONNX版
+      const isSchnell = modelId === 'flux1-schnell-onnx'
+      result = await callOnnxFluxAPI(prompt, isSchnell)
+      usedBackend = isSchnell ? 'onnx-flux-schnell' : 'onnx-flux-dev'
+    } else if (modelId === 'bagel-7b-mot-int8') {
+      // BAGEL INT8量子化版
+      result = await callBagelInt8API(prompt, image1)
+      usedBackend = 'bagel-int8'
     } else {
       // Qwen系モデルを使用
       // バックエンドを確認
@@ -963,6 +983,115 @@ async function callFlux2CloudAPI(prompt: string, image: File | null): Promise<st
   }
 
   throw new Error('FLUX.2画像の生成に失敗しました')
+}
+
+// ncnn Vulkan Upscale API呼び出し
+async function callNcnnUpscaleAPI(image: File): Promise<string> {
+  console.log('Calling ncnn Vulkan Upscale API...')
+
+  const formData = new FormData()
+  formData.append('image', image)
+  formData.append('scale', '4')
+  formData.append('model', 'realesrgan-x4plus')
+
+  const res = await fetch(`${NCNN_LOCAL_URL}/upscale`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(error.detail || 'ncnn超解像度処理に失敗しました')
+  }
+
+  const data = await res.json()
+  return data.image
+}
+
+// ONNX Stable Diffusion API呼び出し
+async function callOnnxSDAPI(prompt: string, negativePrompt: string, image: File | null): Promise<string> {
+  console.log('Calling ONNX Stable Diffusion API...')
+
+  const formData = new FormData()
+  formData.append('prompt', prompt)
+  formData.append('negative_prompt', negativePrompt)
+  formData.append('num_inference_steps', '30')
+  formData.append('guidance_scale', '7.5')
+  formData.append('seed', '-1')
+
+  if (image) {
+    formData.append('image', image)
+    formData.append('strength', '0.75')
+  }
+
+  const res = await fetch(`${ONNX_SD_LOCAL_URL}/generate`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(error.detail || 'ONNX Stable Diffusionでの生成に失敗しました')
+  }
+
+  const data = await res.json()
+  return data.image
+}
+
+// ONNX FLUX API呼び出し
+async function callOnnxFluxAPI(prompt: string, isSchnell: boolean): Promise<string> {
+  console.log(`Calling ONNX FLUX ${isSchnell ? 'Schnell' : 'Dev'} API...`)
+
+  const formData = new FormData()
+  formData.append('prompt', prompt)
+  formData.append('model', isSchnell ? 'schnell' : 'dev')
+  formData.append('num_inference_steps', isSchnell ? '4' : '30')
+  formData.append('guidance_scale', isSchnell ? '0' : '3.5')
+  formData.append('width', '1024')
+  formData.append('height', '1024')
+  formData.append('seed', '-1')
+
+  const res = await fetch(`${ONNX_FLUX_LOCAL_URL}/generate`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(error.detail || 'ONNX FLUXでの生成に失敗しました')
+  }
+
+  const data = await res.json()
+  return data.image
+}
+
+// BAGEL INT8 API呼び出し
+async function callBagelInt8API(prompt: string, image: File | null): Promise<string> {
+  console.log('Calling BAGEL INT8 API...')
+
+  const formData = new FormData()
+  formData.append('prompt', prompt)
+  formData.append('mode', image ? 'edit' : 'generate')
+  formData.append('num_steps', '30')
+  formData.append('cfg_scale', '7.0')
+  formData.append('seed', '-1')
+
+  if (image) {
+    formData.append('image1', image)
+  }
+
+  const res = await fetch(`${BAGEL_INT8_LOCAL_URL}/generate`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(error.detail || 'BAGEL INT8での生成に失敗しました')
+  }
+
+  const data = await res.json()
+  return data.image
 }
 
 // ============================
