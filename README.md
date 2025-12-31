@@ -1,99 +1,210 @@
-# Qwen Image Edit
+# 🎨 Qwen Image Edit
 
-Qwen-Image-Edit-2511モデルを使用したAI画像編集Webアプリケーション。PhotoShop風のUIで直感的に操作できます。
+<div align="center">
 
-## 機能
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
+![React](https://img.shields.io/badge/React-19-61DAFB)
+![Hono](https://img.shields.io/badge/Hono-4.7-orange)
 
-- **画像生成**: プロンプトから新規画像を生成
-- **画像編集**: 1枚の画像をプロンプトに従って編集
-- **画像合成**: 2枚の画像を組み合わせて新しい画像を生成
-- **超解像度**: Real-ESRGANによる4倍アップスケール
-- **保存**: PNG/JPEG形式で保存
+**複数のAIモデルに対応した画像生成・編集Webアプリケーション**
 
-## 対応AIモデル
+[デモ](https://qwen-image-edit.sayasaya.workers.dev) | [ドキュメント](#使い方) | [ローカルセットアップ](#ローカル環境セットアップ)
 
-| モデル | 機能 | バックエンド |
-|--------|------|-------------|
-| **Qwen-Image-Edit-2511** | 画像生成・編集・合成 | CUDA / Cloud |
-| **BAGEL-7B-MoT** | 統合マルチモーダル（生成・編集・理解） | CUDA / Cloud |
-| **Z-Image-Turbo** | 高速テキストから画像生成 | CUDA / Cloud |
-| **FLUX.2 [dev]** | 32B最先端画像生成・編集 | CUDA / Cloud |
-| **Real-ESRGAN** | 超解像度（4倍アップスケール） | CUDA / CPU |
-| **Stable Diffusion 1.5** | 画像生成（DirectML対応） | DirectML / CUDA / CPU |
+</div>
 
-## 技術スタック
+---
 
-- **フロントエンド**: React 19 + TypeScript + Tailwind CSS + Vite
-- **バックエンド**: Hono + Bun / Cloudflare Workers
-- **AIモデル**: HuggingFace Spaces / ローカルGPU
+## ✨ 特徴
 
-## クイックスタート
+- 🖼️ **PhotoShop風UI** - 直感的に操作できるモダンなインターフェース
+- 🤖 **複数AIモデル対応** - Qwen, BAGEL, FLUX, Z-Image など最新モデルを搭載
+- ☁️ **クラウド & ローカル** - HuggingFace Spaces経由のクラウド実行とローカルGPU実行の両対応
+- 🚀 **高速デプロイ** - Cloudflare Workers で世界中からアクセス可能
+- 🔧 **ncnn/ONNX対応** - AMD/Intel GPUでもDirectML/Vulkanで動作
 
-### クラウドモード（推奨）
+## 🎯 機能
 
-\`\`\`bash
-# 依存関係インストール
+| モード | 説明 | 必要画像数 |
+|--------|------|-----------|
+| **生成** | プロンプトから新規画像を生成 | 0枚 |
+| **編集** | 画像をプロンプトに従って編集 | 1枚 |
+| **合成** | 複数画像を組み合わせて新画像を生成 | 2枚以上 |
+| **超解像度** | 画像を4倍にアップスケール | 1枚 |
+
+## 🤖 対応モデル
+
+### クラウドモデル（HuggingFace Spaces）
+
+| モデル | 種類 | 説明 |
+|--------|------|------|
+| **Qwen-Image-Edit-2511** | 画像編集 | Qwenの画像編集モデル（デフォルト） |
+| **BAGEL-7B-MoT** | マルチモーダル | ByteDanceの統合モデル（生成・編集・理解） |
+| **Z-Image-Turbo** | 高速生成 | Tongyiの高速テキスト→画像生成 |
+| **FLUX.2 [dev]** | 最新生成 | Black Forest Labsの32B最先端モデル |
+
+### ローカル専用モデル
+
+| モデル | 種類 | 対応GPU | 説明 |
+|--------|------|---------|------|
+| **Real-ESRGAN x4** | 超解像度 | CUDA/CPU | 画像を4倍にアップスケール |
+| **Real-ESRGAN ncnn** | 超解像度 | Vulkan | AMD/Intel/NVIDIA対応 |
+| **Stable Diffusion ONNX** | 生成 | DirectML | AMD/Intel GPU対応 |
+| **FLUX.1 ONNX** | 生成 | DirectML/CUDA | ONNX最適化版 |
+| **BAGEL INT8** | 生成/編集 | CUDA | 量子化版（省VRAM） |
+
+## 🛠️ 技術スタック
+
+```
+フロントエンド: React 19 + TypeScript + Tailwind CSS + Vite
+バックエンド:   Hono (Bun / Cloudflare Workers)
+AIモデル:       HuggingFace Spaces / ローカルPython
+デプロイ:       Cloudflare Workers + KV Storage
+```
+
+## 🚀 クイックスタート
+
+### オンライン版（推奨）
+
+👉 **[https://qwen-image-edit.sayasaya.workers.dev](https://qwen-image-edit.sayasaya.workers.dev)**
+
+すぐに使えます。インストール不要。
+
+### ローカル開発
+
+```bash
+# リポジトリをクローン
+git clone https://github.com/sayasaya8039/Qwen-Image-Edit.git
+cd Qwen-Image-Edit
+
+# 依存関係をインストール
 bun install
 
-# 開発サーバー起動（フロント + バック同時）
+# 開発サーバー起動
 bun run dev
+```
 
-# または個別に起動
-bun run dev:client  # フロントエンド: http://localhost:5173
-bun run dev:server  # バックエンド: http://localhost:3001
-\`\`\`
+- フロントエンド: http://localhost:5173
+- バックエンド: http://localhost:3001
 
-### ローカルGPUモード
+## 📖 使い方
 
-ローカルGPUでAIモデルを実行する場合は、[ローカル環境セットアップガイド](docs/LOCAL_SETUP.md)を参照してください。
+### 1. 画像生成（プロンプトのみ）
 
-#### Windows
+```
+モード: 生成
+プロンプト: A beautiful sunset over the ocean with vibrant orange and purple colors
+```
 
-\`\`\`batch
-start_local.bat
-\`\`\`
+### 2. 画像編集（1枚の画像）
 
-#### Linux / Mac
+```
+モード: 編集
+画像: [編集したい画像をアップロード]
+プロンプト: Change the background to a forest, keep the person
+```
 
-\`\`\`bash
-chmod +x start_local.sh
-./start_local.sh
-\`\`\`
+### 3. 画像合成（2枚以上の画像）
 
-## 使い方
+```
+モード: 合成
+画像1: [人物の写真]
+画像2: [背景の写真]
+プロンプト: Combine the person from image 1 with the background from image 2
+```
 
-1. **画像なし（生成モード）**: プロンプトを入力して「生成する」をクリック
-2. **画像1枚（編集モード）**: 画像をアップロードし、編集内容をプロンプトで指定
-3. **画像2枚（合成モード）**: 2枚の画像をアップロードし、合成方法をプロンプトで指定
+## 🖥️ ローカル環境セットアップ
 
-## デプロイ
+ローカルGPUを使用する場合は、別途Pythonサーバーが必要です。
+
+### 必要環境
+
+- Python 3.10+
+- CUDA 11.8+ / DirectML / Vulkan
+- VRAM 8GB以上（モデルによる）
+
+### Pythonサーバー起動
+
+```bash
+# 仮想環境作成
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 依存関係インストール
+pip install -r python/requirements.txt
+
+# サーバー起動
+python python/server.py
+```
+
+## 📁 プロジェクト構造
+
+```
+Qwen-Image-Edit/
+├── src/                    # フロントエンド（React）
+│   ├── components/         # UIコンポーネント
+│   ├── pages/              # ページ
+│   └── types.ts            # 型定義
+├── server/                 # バックエンド（Bun用）
+│   ├── index.ts            # APIエンドポイント
+│   └── model-manager.ts    # モデル管理
+├── worker/                 # Cloudflare Workers用
+│   ├── index.ts            # Workers APIエンドポイント
+│   └── model-manager.ts    # KVストレージ連携
+├── python/                 # ローカルPythonサーバー
+│   └── server.py           # 推論サーバー
+└── wrangler.toml           # Cloudflare設定
+```
+
+## 🔧 環境変数
 
 ### Cloudflare Workers
 
-\`\`\`bash
-npm run deploy
-\`\`\`
+```bash
+# wrangler.toml で設定済み
+ADMIN_USERNAME=admin
 
-### 本番ビルド
+# シークレット（wrangler secret で設定）
+wrangler secret put ADMIN_PASSWORD
+wrangler secret put SESSION_SECRET
+```
 
-\`\`\`bash
+### ローカル開発
+
+```bash
+# .env.local
+PYTHON_SERVER_URL=http://localhost:8000
+HF_SPACE_URL=https://qwen-qwen-image-edit-2511.hf.space
+```
+
+## 🚀 デプロイ
+
+### Cloudflare Workers
+
+```bash
+# ビルド
 bun run build
-\`\`\`
 
-## VRAM要件（ローカルモード）
+# デプロイ
+npx wrangler deploy
+```
 
-| モデル | 最小VRAM | 推奨VRAM |
-|--------|----------|----------|
-| Qwen-Image-Edit | 8GB | 12GB |
-| BAGEL-7B-MoT | 12GB | 24GB |
-| Z-Image-Turbo | 16GB | 24GB |
-| FLUX.2 [dev] | 16GB | 48GB |
-| Real-ESRGAN | 4GB | 8GB |
+## 📝 ライセンス
 
-## ドキュメント
+MIT License
 
-- [ローカル環境セットアップガイド](docs/LOCAL_SETUP.md)
+## 🙏 クレジット
 
-## ライセンス
+- [Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) - Alibaba Qwen Team
+- [BAGEL-7B-MoT](https://huggingface.co/ByteDance/BAGEL-7B-MoT) - ByteDance
+- [FLUX.2](https://huggingface.co/black-forest-labs/FLUX.2-dev) - Black Forest Labs
+- [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) - Xintao Wang
 
-MIT
+---
+
+<div align="center">
+Made with ❤️ by sayasaya8039
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+</div>
