@@ -1994,7 +1994,7 @@ async function callFlux2KleinAPI(
 
 		// イベントストリームから結果を取得（タイムアウト設定）
 		const streamController = new AbortController();
-		const streamTimeoutId = setTimeout(() => streamController.abort(), 60000); // 60秒
+		const streamTimeoutId = setTimeout(() => streamController.abort(), 120000); // 120秒
 
 		const streamRes = await fetch(
 			`${FLUX2_KLEIN_SPACE_URL}/gradio_api/call/generate_image/${eventId}`,
