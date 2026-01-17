@@ -1,250 +1,356 @@
-import { useState, useCallback, useEffect } from 'react'
-import { Header } from './components/Header'
-import { Toolbar } from './components/Toolbar'
-import { ImageCanvas } from './components/ImageCanvas'
-import { PropertiesPanel } from './components/PropertiesPanel'
-import { StatusBar } from './components/StatusBar'
-import type { ImageFile, EditMode, GenerationStatus } from './types'
+import { useCallback, useEffect, useState } from "react";
+import { useImageResize } from "./hooks/useImageResize";
+import { Header } from "./components/Header";
+import { ImageCanvas } from "./components/ImageCanvas";
+import { PropertiesPanel } from "./components/PropertiesPanel";
+import { StatusBar } from "./components/StatusBar";
+import { Toolbar } from "./components/Toolbar";
+import type { EditMode, GenerationStatus, ImageFile } from "./types";
 
 // バックエンド名を日本語表示に変換
 function getBackendDisplayName(backend: string): string {
-  const names: Record<string, string> = {
-    'local': 'ローカル',
-    'huggingface': 'HuggingFace',
-    'replicate': 'Replicate',
-    'bagel': 'BAGEL Space',
-    'zimage': 'Z-Image Space',
-    'flux2': 'FLUX.2 Space',
-  }
-  return names[backend] || backend || 'クラウド'
+	const names: Record<string, string> = {
+		local: "ローカル",
+		huggingface: "HuggingFace",
+		replicate: "Replicate",
+		bagel: "BAGEL Space",
+		zimage: "Z-Image Space",
+		flux2: "FLUX.2 Space",
+	};
+	return names[backend] || backend || "クラウド";
 }
 
 interface ModelInfo {
-  id: string
-  name: string
-  description: string
-  type: string
-  isDefault: boolean
+	id: string;
+	name: string;
+	description: string;
+	type: string;
+	isDefault: boolean;
 }
 
 export default function App() {
-  const [images, setImages] = useState<ImageFile[]>([])
-  const [outputImage, setOutputImage] = useState<string | null>(null)
-  const [prompt, setPrompt] = useState('')
-  const [negativePrompt, setNegativePrompt] = useState('')
-  const [editMode, setEditMode] = useState<EditMode>('generate')
-  const [aspectRatio, setAspectRatio] = useState('1:1')
-  const [resolution, setResolution] = useState('1024')
-  const [models, setModels] = useState<ModelInfo[]>([])
-  const [selectedModelId, setSelectedModelId] = useState<string>('')
-  const [backendType, setBackendType] = useState<string>('')
-  const [status, setStatus] = useState<GenerationStatus>({
-    isProcessing: false,
-    progress: 0,
-    message: '準備完了',
-  })
+	const [images, setImages] = useState<ImageFile[]>([]);
+	const { resizeImage, ready: wasmReady, loading: wasmLoading } = useImageResize();
+	const [outputImage, setOutputImage] = useState<string | null>(null);
+	const [outputVideo, setOutputVideo] = useState<string | null>(null);
+	const [prompt, setPrompt] = useState("");
+	const [negativePrompt, setNegativePrompt] = useState("");
+	const [editMode, setEditMode] = useState<EditMode>("generate");
+	const [aspectRatio, setAspectRatio] = useState("1:1");
+	const [resolution, setResolution] = useState("1024");
+	const [models, setModels] = useState<ModelInfo[]>([]);
+	const [selectedModelId, setSelectedModelId] = useState<string>("");
+	const [backendType, setBackendType] = useState<string>("");
+	const [status, setStatus] = useState<GenerationStatus>({
+		isProcessing: false,
+		progress: 0,
+		message: "準備完了",
+	});
 
-  // モデル一覧とバックエンド情報を取得
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // モデル一覧を取得
-        const modelsRes = await fetch('/api/models')
-        if (modelsRes.ok) {
-          const data = await modelsRes.json()
-          setModels(data.models || [])
-          const defaultModel = data.models?.find((m: ModelInfo) => m.isDefault)
-          if (defaultModel) {
-            setSelectedModelId(defaultModel.id)
-          } else if (data.models?.length > 0) {
-            setSelectedModelId(data.models[0].id)
-          }
-        }
+	// モデル一覧とバックエンド情報を取得
+	useEffect(() => {
+		const fetchData = async () => {
+			try {
+				// モデル一覧を取得
+				const modelsRes = await fetch("/api/models");
+				if (modelsRes.ok) {
+					const data = await modelsRes.json();
+					setModels(data.models || []);
+					const defaultModel = data.models?.find((m: ModelInfo) => m.isDefault);
+					if (defaultModel) {
+						setSelectedModelId(defaultModel.id);
+					} else if (data.models?.length > 0) {
+						setSelectedModelId(data.models[0].id);
+					}
+				}
 
-        // バックエンド情報を取得
-        const healthRes = await fetch('/api/health')
-        if (healthRes.ok) {
-          const data = await healthRes.json()
-          setBackendType(data.backend?.backend || '')
-        }
-      } catch (error) {
-        console.error('Failed to fetch data:', error)
-      }
-    }
-    fetchData()
-  }, [])
+				// バックエンド情報を取得
+				const healthRes = await fetch("/api/health");
+				if (healthRes.ok) {
+					const data = await healthRes.json();
+					setBackendType(data.backend?.backend || "");
+				}
+			} catch (error) {
+				console.error("Failed to fetch data:", error);
+			}
+		};
+		fetchData();
+	}, []);
 
-  // 画像の追加（最大4枚）
-  const handleAddImage = useCallback((files: File[]) => {
-    const newImages = files.slice(0, 4 - images.length).map((file) => ({
-      id: crypto.randomUUID(),
-      file,
-      preview: URL.createObjectURL(file),
-      enabled: true,  // デフォルトで有効
-    }))
-    setImages((prev) => [...prev, ...newImages].slice(0, 4))
+	// 画像の追加（最大4枚）- WASM統合版
+	const handleAddImage = useCallback(
+		async (files: File[]) => {
+			const newImages = await Promise.all(
+				files.slice(0, 4 - images.length).map(async (file) => {
+					let preview = URL.createObjectURL(file);
 
-    // モード自動判定
-    const totalImages = images.length + newImages.length
-    if (totalImages >= 1) {
-      setEditMode('edit')
-    }
-    if (totalImages >= 2) {
-      setEditMode('combine')
-    }
-  }, [images.length])
+					// WASMが利用可能で、画像が大きい場合はリサイズしてプレビューを最適化
+					if (wasmReady && resizeImage) {
+						try {
+							const img = new Image();
+							img.src = preview;
+							await new Promise((resolve) => {
+								img.onload = resolve;
+							});
 
-  // 画像の有効/無効切り替え
-  const handleToggleImage = useCallback((id: string) => {
-    setImages((prev) => prev.map((img) =>
-      img.id === id ? { ...img, enabled: !img.enabled } : img
-    ))
-  }, [])
+							// 1024px以上の画像はリサイズ（プレビュー最適化）
+							const maxDimension = 1024;
+							if (img.width > maxDimension || img.height > maxDimension) {
+								const canvas = document.createElement("canvas");
+								const ctx = canvas.getContext("2d");
+								if (ctx) {
+									canvas.width = img.width;
+									canvas.height = img.height;
+									ctx.drawImage(img, 0, 0);
+									const imageData = ctx.getImageData(0, 0, img.width, img.height);
 
-  // 画像の削除
-  const handleRemoveImage = useCallback((id: string) => {
-    setImages((prev) => {
-      const filtered = prev.filter((img) => img.id !== id)
-      // モード自動判定
-      if (filtered.length === 0) {
-        setEditMode('generate')
-      } else if (filtered.length === 1) {
-        setEditMode('edit')
-      }
-      return filtered
-    })
-  }, [])
+									// アスペクト比を維持してリサイズ
+									const scale = maxDimension / Math.max(img.width, img.height);
+									const newWidth = Math.floor(img.width * scale);
+									const newHeight = Math.floor(img.height * scale);
 
-  // 画像のクリア
-  const handleClearImages = useCallback(() => {
-    images.forEach((img) => URL.revokeObjectURL(img.preview))
-    setImages([])
-    setOutputImage(null)
-    setEditMode('generate')
-  }, [images])
+									const resized = resizeImage(imageData, newWidth, newHeight);
+									if (resized) {
+										canvas.width = newWidth;
+										canvas.height = newHeight;
+										ctx.putImageData(resized, 0, 0);
 
-  // 画像生成/編集
-  const handleGenerate = useCallback(async () => {
-    if (!prompt.trim()) {
-      setStatus({ isProcessing: false, progress: 0, message: 'プロンプトを入力してください' })
-      return
-    }
+										// 古いプレビューURLを解放
+										URL.revokeObjectURL(preview);
 
-    setStatus({ isProcessing: true, progress: 10, message: '処理を開始...' })
-    setOutputImage(null)
+										// 新しいプレビューを生成
+										preview = await new Promise<string>((resolve) => {
+											canvas.toBlob((blob) => {
+												if (blob) {
+													resolve(URL.createObjectURL(blob));
+												} else {
+													resolve(preview); // フォールバック
+												}
+											}, "image/jpeg", 0.85);
+										});
 
-    try {
-      const formData = new FormData()
-      formData.append('prompt', prompt)
-      formData.append('negative_prompt', negativePrompt)
-      formData.append('mode', editMode)
-      formData.append('aspect_ratio', aspectRatio)
-      formData.append('resolution', resolution)
-      if (selectedModelId) {
-        formData.append('modelId', selectedModelId)
-      }
+										console.log(
+											`WASM: ${img.width}x${img.height} → ${newWidth}x${newHeight}`
+										);
+									}
+								}
+							}
+						} catch (err) {
+							console.warn("WASM resize failed, using original:", err);
+						}
+					}
 
-      // 有効な画像のみ送信
-      const enabledImages = images.filter(img => img.enabled)
-      enabledImages.forEach((img, index) => {
-        formData.append(`image${index + 1}`, img.file)
-      })
+					return {
+						id: crypto.randomUUID(),
+						file,
+						preview,
+						enabled: true,
+					};
+				})
+			);
 
-      setStatus({ isProcessing: true, progress: 30, message: 'AI処理中...' })
+			setImages((prev) => [...prev, ...newImages].slice(0, 4));
 
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        body: formData,
-      })
+			// モード自動判定
+			const totalImages = images.length + newImages.length;
+			if (totalImages >= 1) {
+				setEditMode("edit");
+			}
+			if (totalImages >= 2) {
+				setEditMode("combine");
+			}
+		},
+		[images.length, wasmReady, resizeImage],
+	);
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || '生成に失敗しました')
-      }
+	// 画像の有効/無効切り替え
+	const handleToggleImage = useCallback((id: string) => {
+		setImages((prev) =>
+			prev.map((img) =>
+				img.id === id ? { ...img, enabled: !img.enabled } : img,
+			),
+		);
+	}, []);
 
-      setStatus({ isProcessing: true, progress: 80, message: '画像を受信中...' })
+	// 画像の削除
+	const handleRemoveImage = useCallback((id: string) => {
+		setImages((prev) => {
+			const filtered = prev.filter((img) => img.id !== id);
+			// モード自動判定
+			if (filtered.length === 0) {
+				setEditMode("generate");
+			} else if (filtered.length === 1) {
+				setEditMode("edit");
+			}
+			return filtered;
+		});
+	}, []);
 
-      const result = await response.json()
-      setOutputImage(result.image)
+	// 画像のクリア
+	const handleClearImages = useCallback(() => {
+		for (const img of images) {
+			URL.revokeObjectURL(img.preview);
+		}
+		setImages([]);
+		setOutputImage(null);
+		setOutputVideo(null);
+		setEditMode("generate");
+	}, [images]);
 
-      // 使用したモデル/バックエンドを表示
-      const modelName = result.model?.name || result.modelId || '不明'
-      const backendName = getBackendDisplayName(result.backend)
-      const translatedInfo = result.translated ? ` (翻訳: ${result.prompt})` : ''
+	// 画像生成/編集
+	const handleGenerate = useCallback(async () => {
+		if (!prompt.trim()) {
+			setStatus({
+				isProcessing: false,
+				progress: 0,
+				message: "プロンプトを入力してください",
+			});
+			return;
+		}
 
-      setStatus({
-        isProcessing: false,
-        progress: 100,
-        message: `✓ ${modelName} (${backendName}) で生成完了${translatedInfo}`
-      })
-    } catch (error) {
-      console.error('Generation error:', error)
-      setStatus({
-        isProcessing: false,
-        progress: 0,
-        message: `エラー: ${error instanceof Error ? error.message : '不明なエラー'}`,
-      })
-    }
-  }, [prompt, negativePrompt, editMode, images, aspectRatio, resolution, selectedModelId])
+		setStatus({ isProcessing: true, progress: 10, message: "処理を開始..." });
+		setOutputImage(null);
+		setOutputVideo(null);
 
-  // 画像の保存
-  const handleSave = useCallback((format: 'png' | 'jpeg') => {
-    if (!outputImage) return
+		try {
+			const formData = new FormData();
+			formData.append("prompt", prompt);
+			formData.append("negative_prompt", negativePrompt);
+			formData.append("mode", editMode);
+			formData.append("aspect_ratio", aspectRatio);
+			formData.append("resolution", resolution);
+			if (selectedModelId) {
+				formData.append("modelId", selectedModelId);
+			}
 
-    const link = document.createElement('a')
-    link.href = outputImage
-    link.download = `qwen-image-edit-${Date.now()}.${format}`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }, [outputImage])
+			// 有効な画像のみ送信
+			const enabledImages = images.filter((img) => img.enabled);
+			enabledImages.forEach((img, index) => {
+				formData.append(`image${index + 1}`, img.file);
+			});
 
-  return (
-    <div className="flex flex-col h-screen">
-      {/* ヘッダー */}
-      <Header onSave={handleSave} hasOutput={!!outputImage} />
+			setStatus({ isProcessing: true, progress: 30, message: "AI処理中..." });
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* 左サイドバー - ツールバー */}
-        <Toolbar editMode={editMode} onModeChange={setEditMode} />
+			const response = await fetch("/api/generate", {
+				method: "POST",
+				body: formData,
+			});
 
-        {/* メインキャンバスエリア */}
-        <div className="flex-1 flex flex-col">
-          <ImageCanvas
-            images={images}
-            outputImage={outputImage}
-            onAddImage={handleAddImage}
-            onRemoveImage={handleRemoveImage}
-            onToggleImage={handleToggleImage}
-            onClearImages={handleClearImages}
-            status={status}
-          />
-        </div>
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.message || "生成に失敗しました");
+			}
 
-        {/* 右サイドバー - プロパティパネル */}
-        <PropertiesPanel
-          prompt={prompt}
-          negativePrompt={negativePrompt}
-          editMode={editMode}
-          imageCount={images.length}
-          enabledImageCount={images.filter(img => img.enabled).length}
-          aspectRatio={aspectRatio}
-          resolution={resolution}
-          models={models}
-          selectedModelId={selectedModelId}
-          backendType={backendType}
-          onPromptChange={setPrompt}
-          onNegativePromptChange={setNegativePrompt}
-          onAspectRatioChange={setAspectRatio}
-          onResolutionChange={setResolution}
-          onModelChange={setSelectedModelId}
-          onGenerate={handleGenerate}
-          isProcessing={status.isProcessing}
-        />
-      </div>
+			setStatus({
+				isProcessing: true,
+				progress: 80,
+				message: "画像を受信中...",
+			});
 
-      {/* ステータスバー */}
-      <StatusBar status={status} imageCount={images.length} enabledImageCount={images.filter(img => img.enabled).length} editMode={editMode} />
-    </div>
-  )
+			const result = await response.json();
+			if (result.type === "video") {
+				setOutputVideo(result.video);
+			} else {
+				setOutputImage(result.image);
+			}
+
+			// 使用したモデル/バックエンドを表示
+			const modelName = result.model?.name || result.modelId || "不明";
+			const backendName = getBackendDisplayName(result.backend);
+			const translatedInfo = result.translated
+				? ` (翻訳: ${result.prompt})`
+				: "";
+
+			setStatus({
+				isProcessing: false,
+				progress: 100,
+				message: `✓ ${modelName} (${backendName}) で生成完了${translatedInfo}`,
+			});
+		} catch (error) {
+			console.error("Generation error:", error);
+			setStatus({
+				isProcessing: false,
+				progress: 0,
+				message: `エラー: ${error instanceof Error ? error.message : "不明なエラー"}`,
+			});
+		}
+	}, [
+		prompt,
+		negativePrompt,
+		editMode,
+		images,
+		aspectRatio,
+		resolution,
+		selectedModelId,
+	]);
+
+	// 画像の保存
+	const handleSave = useCallback(
+		(format: "png" | "jpeg") => {
+			if (!outputImage) return;
+
+			const link = document.createElement("a");
+			link.href = outputImage;
+			link.download = `qwen-image-edit-${Date.now()}.${format}`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+		},
+		[outputImage],
+	);
+
+	return (
+		<div className="flex flex-col h-screen">
+			{/* ヘッダー */}
+			<Header onSave={handleSave} hasOutput={!!outputImage} />
+
+			<div className="flex flex-1 overflow-hidden">
+				{/* 左サイドバー - ツールバー */}
+				<Toolbar editMode={editMode} onModeChange={setEditMode} />
+
+				{/* メインキャンバスエリア */}
+				<div className="flex-1 flex flex-col">
+					<ImageCanvas
+						images={images}
+						outputImage={outputImage}
+						outputVideo={outputVideo}
+						onAddImage={handleAddImage}
+						onRemoveImage={handleRemoveImage}
+						onToggleImage={handleToggleImage}
+						onClearImages={handleClearImages}
+						status={status}
+					/>
+				</div>
+
+				{/* 右サイドバー - プロパティパネル */}
+				<PropertiesPanel
+					prompt={prompt}
+					negativePrompt={negativePrompt}
+					editMode={editMode}
+					imageCount={images.length}
+					enabledImageCount={images.filter((img) => img.enabled).length}
+					aspectRatio={aspectRatio}
+					resolution={resolution}
+					models={models}
+					selectedModelId={selectedModelId}
+					backendType={backendType}
+					onPromptChange={setPrompt}
+					onNegativePromptChange={setNegativePrompt}
+					onAspectRatioChange={setAspectRatio}
+					onResolutionChange={setResolution}
+					onModelChange={setSelectedModelId}
+					onGenerate={handleGenerate}
+					isProcessing={status.isProcessing}
+				/>
+			</div>
+
+			{/* ステータスバー */}
+			<StatusBar
+				status={status}
+				imageCount={images.length}
+				enabledImageCount={images.filter((img) => img.enabled).length}
+				editMode={editMode}
+			/>
+		</div>
+	);
 }

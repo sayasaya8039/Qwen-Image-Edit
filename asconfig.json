@@ -1,0 +1,25 @@
+{
+  "targets": {
+    "debug": {
+      "outFile": "public/wasm/image-resize.debug.wasm",
+      "textFile": "public/wasm/image-resize.debug.wat",
+      "sourceMap": true,
+      "debug": true
+    },
+    "release": {
+      "outFile": "public/wasm/image-resize.wasm",
+      "textFile": "public/wasm/image-resize.wat",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true
+    }
+  },
+  "options": {
+    "bindings": "esm",
+    "runtime": "stub",
+    "exportRuntime": false,
+    "use": "Math=JSMath"
+  }
+}

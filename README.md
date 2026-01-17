@@ -20,6 +20,7 @@
 
 - 🖼️ **PhotoShop風UI** - 直感的に操作できるモダンなインターフェース
 - 🤖 **複数AIモデル対応** - Qwen, BAGEL, FLUX, Z-Image など最新モデルを搭載
+- ⚡ **WebAssembly高速化** - 画像リサイズをWASMで最大10倍高速化
 - ☁️ **クラウド & ローカル** - HuggingFace Spaces経由のクラウド実行とローカルGPU実行の両対応
 - 🚀 **高速デプロイ** - Cloudflare Workers で世界中からアクセス可能
 - 🔧 **ncnn/ONNX対応** - AMD/Intel GPUでもDirectML/Vulkanで動作
