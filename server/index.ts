@@ -349,7 +349,10 @@ app.post('/api/generate', async (c) => {
         result = await callLocalAPI(prompt, negativePrompt, image1, image2)
       } else if (backendStatus.mode === 'cloud') {
         // HuggingFace Spaceを使用
-        result = await callGradioAPI(prompt, negativePrompt, image1, image2)
+        const modelConfig = getModel(modelId)
+        const spaceUrl = modelConfig?.source || HF_SPACE_URL
+        console.log('Cloud model config:', { modelId, source: modelConfig?.source, spaceUrl })
+        result = await callGradioAPI(spaceUrl, prompt, negativePrompt, image1, image2)
         usedBackend = 'qwen-cloud'
       } else {
         return c.json(
@@ -422,6 +425,7 @@ async function callLocalAPI(
 
 // Gradio API呼び出し (HuggingFace Space)
 async function callGradioAPI(
+  spaceUrl: string,
   prompt: string,
   negativePrompt: string,
   image1: File | null,
@@ -447,7 +451,7 @@ async function callGradioAPI(
 
   // Queue APIを使用
   const sessionHash = crypto.randomUUID()
-  const queueRes = await fetch(`${HF_SPACE_URL}/queue/join`, {
+  const queueRes = await fetch(`${spaceUrl}/queue/join`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -472,7 +476,7 @@ async function callGradioAPI(
   }
 
   // イベントストリームから結果を取得
-  const streamRes = await fetch(`${HF_SPACE_URL}/queue/data?session_hash=${sessionHash}`)
+  const streamRes = await fetch(`${spaceUrl}/queue/data?session_hash=${sessionHash}`)
 
   if (!streamRes.ok) {
     throw new Error('結果の取得に失敗しました')
