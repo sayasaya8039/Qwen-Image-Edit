@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { serve } from 'bun'
+import { Client } from '@gradio/client'
 
 import { authMiddleware, loginHandler, logoutHandler, checkSessionHandler } from './auth'
 import {
@@ -431,82 +432,85 @@ async function callGradioAPI(
   image1: File | null,
   image2: File | null
 ): Promise<string> {
-  // 画像をBase64に変換
-  const images: string[] = []
+  console.log('Connecting to HuggingFace Space:', spaceUrl)
 
-  if (image1) {
-    const buffer = await image1.arrayBuffer()
-    const base64 = Buffer.from(buffer).toString('base64')
-    const mimeType = image1.type || 'image/png'
-    images.push(`data:${mimeType};base64,${base64}`)
-  }
-  if (image2) {
-    const buffer = await image2.arrayBuffer()
-    const base64 = Buffer.from(buffer).toString('base64')
-    const mimeType = image2.type || 'image/png'
-    images.push(`data:${mimeType};base64,${base64}`)
-  }
+  try {
+    // @gradio/clientを使用してSpaceに接続
+    const client = await Client.connect(spaceUrl)
+    
+    // 画像をBlobに変換
+    const images: Blob[] = []
+    if (image1) {
+      const buffer = await image1.arrayBuffer()
+      images.push(new Blob([buffer], { type: image1.type || 'image/png' }))
+    }
+    if (image2) {
+      const buffer = await image2.arrayBuffer()
+      images.push(new Blob([buffer], { type: image2.type || 'image/png' }))
+    }
 
-  console.log('Calling HuggingFace Space...')
+    console.log('Calling predict with params:', {
+      hasImages: images.length > 0,
+      promptLength: prompt.length,
+      negativePromptLength: negativePrompt.length,
+    })
 
-  // Queue APIを使用
-  const sessionHash = crypto.randomUUID()
-  const queueRes = await fetch(`${spaceUrl}/queue/join`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      data: [
-        images.length > 0 ? images : null,
-        prompt,
-        negativePrompt,
-        40, // num_inference_steps
-        4.0, // true_cfg_scale
-        1.0, // guidance_scale
-        0, // seed
-      ],
-      fn_index: 0,
-      session_hash: sessionHash,
-    }),
-  })
+    // Gradio Spaceにリクエスト送信
+    // パラメータの順序はSpaceのAPIに合わせる
+    const result = await client.predict('/predict', {
+      image: images.length > 0 ? images[0] : null,
+      prompt: prompt,
+      negative_prompt: negativePrompt,
+      num_inference_steps: 40,
+      true_cfg_scale: 4.0,
+      guidance_scale: 1.0,
+      seed: 0,
+    })
 
-  if (!queueRes.ok) {
-    throw new Error('HuggingFace Spaceへの接続に失敗しました')
-  }
+    console.log('Prediction result:', result)
 
-  // イベントストリームから結果を取得
-  const streamRes = await fetch(`${spaceUrl}/queue/data?session_hash=${sessionHash}`)
-
-  if (!streamRes.ok) {
-    throw new Error('結果の取得に失敗しました')
-  }
-
-  const text = await streamRes.text()
-  const lines = text.split('\n')
-
-  for (const line of lines) {
-    if (line.startsWith('data: ')) {
-      try {
-        const data = JSON.parse(line.slice(6))
-        if (data.msg === 'process_completed' && data.output?.data) {
-          const outputData = data.output.data[0]
-          if (typeof outputData === 'string') {
-            return outputData
-          } else if (outputData?.url) {
-            const imageRes = await fetch(outputData.url)
-            const imageBuffer = await imageRes.arrayBuffer()
-            const base64 = Buffer.from(imageBuffer).toString('base64')
-            return `data:image/png;base64,${base64}`
-          }
+    // 結果から画像データを抽出
+    if (result?.data && Array.isArray(result.data)) {
+      const outputData = result.data[0]
+      
+      // 文字列（Base64等）の場合
+      if (typeof outputData === 'string') {
+        // データURLの場合はそのまま返す
+        if (outputData.startsWith('data:')) {
+          return outputData
         }
-      } catch {
-        // パースエラーは無視
+        // URLの場合は画像を取得してBase64に変換
+        if (outputData.startsWith('http')) {
+          const imageRes = await fetch(outputData)
+          const imageBuffer = await imageRes.arrayBuffer()
+          const base64 = Buffer.from(imageBuffer).toString('base64')
+          return `data:image/png;base64,${base64}`
+        }
+        // Base64の場合はデータURLに変換
+        return `data:image/png;base64,${outputData}`
+      }
+      
+      // オブジェクト（URL付き）の場合
+      if (outputData?.url) {
+        const imageRes = await fetch(outputData.url)
+        const imageBuffer = await imageRes.arrayBuffer()
+        const base64 = Buffer.from(imageBuffer).toString('base64')
+        return `data:image/png;base64,${base64}`
+      }
+      
+      // Blobの場合
+      if (outputData instanceof Blob) {
+        const arrayBuffer = await outputData.arrayBuffer()
+        const base64 = Buffer.from(arrayBuffer).toString('base64')
+        return `data:image/png;base64,${base64}`
       }
     }
-  }
 
-  throw new Error('画像の生成に失敗しました')
+    throw new Error('画像データの抽出に失敗しました')
+  } catch (error) {
+    console.error('Gradio API Error:', error)
+    throw new Error(`HuggingFace Spaceへの接続に失敗しました: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 // BAGEL ローカルAPI呼び出し
