@@ -6,8 +6,27 @@
 			"type": "diffusers",
 			"source": "Qwen/Qwen-Image-Edit-2511",
 			"description": "Qwenの画像編集モデル（CUDA対応）",
-			"backends": ["cuda", "cpu"],
+			"backends": [
+				"cuda",
+				"cpu"
+			],
 			"isDefault": true,
+			"enabled": true,
+			"createdAt": "2025-01-01T00:00:00Z"
+		},
+		{
+			"id": "qwen-image-2512",
+			"name": "Qwen-Image-2512",
+			"type": "cloud",
+			"source": "https://sayasaya11-qwen-image-2512.hf.space",
+			"description": "Qwen最新画像生成モデル - 強化されたリアリズム、自然な描写、高品質テキストレンダリング（HuggingFace Spaces）",
+			"backends": [
+				"cloud"
+			],
+			"capabilities": [
+				"text-to-image"
+			],
+			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
 		},
@@ -17,7 +36,11 @@
 			"type": "onnx",
 			"source": "runwayml/stable-diffusion-v1-5",
 			"description": "Stable Diffusion 1.5（DirectML対応）",
-			"backends": ["directml", "cuda", "cpu"],
+			"backends": [
+				"directml",
+				"cuda",
+				"cpu"
+			],
 			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
@@ -28,8 +51,13 @@
 			"type": "onnx",
 			"source": "Amblyopius/Stable-Diffusion-ONNX-FP16",
 			"description": "Stable Diffusion 1.5 ONNX FP16最適化版（DirectML/AMD/Intel対応）",
-			"backends": ["directml", "cpu"],
-			"capabilities": ["text-to-image"],
+			"backends": [
+				"directml",
+				"cpu"
+			],
+			"capabilities": [
+				"text-to-image"
+			],
 			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
@@ -40,7 +68,9 @@
 			"type": "cloud",
 			"source": "https://qwen-qwen-image-edit-2511.hf.space",
 			"description": "Qwen-Image-Edit-2511 (HuggingFace Spaces)",
-			"backends": ["cloud"],
+			"backends": [
+				"cloud"
+			],
 			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
@@ -51,8 +81,15 @@
 			"type": "cloud",
 			"source": "https://bytedance-seed-bagel.hf.space",
 			"description": "ByteDance BAGEL - 統合マルチモーダルモデル（画像生成・編集・理解、CUDA対応）",
-			"backends": ["cuda", "cloud"],
-			"capabilities": ["text-to-image", "image-edit", "image-understanding"],
+			"backends": [
+				"cuda",
+				"cloud"
+			],
+			"capabilities": [
+				"text-to-image",
+				"image-edit",
+				"image-understanding"
+			],
 			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
@@ -63,8 +100,14 @@
 			"type": "quantized",
 			"source": "Gapeleon/bytedance_BAGEL-7B-MoT-INT8",
 			"description": "BAGEL INT8量子化版（12-24GB VRAM向け）",
-			"backends": ["cuda"],
-			"capabilities": ["text-to-image", "image-edit", "image-understanding"],
+			"backends": [
+				"cuda"
+			],
+			"capabilities": [
+				"text-to-image",
+				"image-edit",
+				"image-understanding"
+			],
 			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
@@ -75,8 +118,13 @@
 			"type": "cloud",
 			"source": "https://tongyi-mai-z-image-turbo.hf.space",
 			"description": "Tongyi 高速・高品質テキストから画像生成（16GB VRAM、CUDA対応）",
-			"backends": ["cuda", "cloud"],
-			"capabilities": ["text-to-image"],
+			"backends": [
+				"cuda",
+				"cloud"
+			],
+			"capabilities": [
+				"text-to-image"
+			],
 			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
@@ -87,8 +135,13 @@
 			"type": "local",
 			"source": "xinntao/Real-ESRGAN",
 			"description": "超解像度 - 画像を4倍にアップスケール（CUDA/CPU対応）",
-			"backends": ["cuda", "cpu"],
-			"capabilities": ["upscale"],
+			"backends": [
+				"cuda",
+				"cpu"
+			],
+			"capabilities": [
+				"upscale"
+			],
 			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
@@ -99,8 +152,13 @@
 			"type": "ncnn",
 			"source": "xinntao/Real-ESRGAN-ncnn-vulkan",
 			"description": "超解像度 ncnn版 - AMD/Intel/NVIDIA GPU対応（Vulkan）",
-			"backends": ["vulkan", "cpu"],
-			"capabilities": ["upscale"],
+			"backends": [
+				"vulkan",
+				"cpu"
+			],
+			"capabilities": [
+				"upscale"
+			],
 			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
@@ -111,8 +169,14 @@
 			"type": "cloud",
 			"source": "https://black-forest-labs-flux-2-dev.hf.space",
 			"description": "Black Forest Labs FLUX.2 - 32B最先端画像生成・編集モデル（CUDA対応、非商用）",
-			"backends": ["cuda", "cloud"],
-			"capabilities": ["text-to-image", "image-edit"],
+			"backends": [
+				"cuda",
+				"cloud"
+			],
+			"capabilities": [
+				"text-to-image",
+				"image-edit"
+			],
 			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
@@ -123,8 +187,14 @@
 			"type": "onnx",
 			"source": "black-forest-labs/FLUX.1-dev-onnx",
 			"description": "FLUX.1 ONNX版 - BF16/FP8/FP4対応（非商用）",
-			"backends": ["directml", "cuda", "cpu"],
-			"capabilities": ["text-to-image"],
+			"backends": [
+				"directml",
+				"cuda",
+				"cpu"
+			],
+			"capabilities": [
+				"text-to-image"
+			],
 			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
@@ -135,11 +205,50 @@
 			"type": "onnx",
 			"source": "black-forest-labs/FLUX.1-schnell-onnx",
 			"description": "FLUX.1 高速ONNX版 - 4ステップ生成（Apache 2.0）",
-			"backends": ["directml", "cuda", "cpu"],
-			"capabilities": ["text-to-image"],
+			"backends": [
+				"directml",
+				"cuda",
+				"cpu"
+			],
+			"capabilities": [
+				"text-to-image"
+			],
 			"isDefault": false,
 			"enabled": true,
 			"createdAt": "2025-01-01T00:00:00Z"
+		},
+		{
+			"id": "flux2-klein-4b-fp8",
+			"name": "FLUX.2 Klein 4B (FP8)",
+			"type": "diffusers",
+			"source": "black-forest-labs/FLUX.2-klein-4b-fp8",
+			"description": "Black Forest Labs FLUX.2 Klein - 軽量4Bパラメータ版（FP8量子化、8GB VRAM対応）",
+			"backends": [
+				"cuda",
+				"cpu"
+			],
+			"capabilities": [
+				"text-to-image"
+			],
+			"isDefault": false,
+			"enabled": true,
+			"createdAt": "2026-01-17T15:27:31.866Z"
+		},
+		{
+			"id": "ltx-2-video",
+			"name": "LTX-2 Video Generator",
+			"type": "cloud",
+			"source": "https://sayasaya11-ltx-2-video.hf.space",
+			"description": "Lightricks LTX-2 - 19Bパラメータ テキストから動画+音声生成（ZeroGPU Pro、fp8量子化）",
+			"backends": [
+				"cloud"
+			],
+			"capabilities": [
+				"text-to-video"
+			],
+			"isDefault": false,
+			"enabled": true,
+			"createdAt": "2026-01-09T18:48:06.946Z"
 		}
 	],
 	"settings": {

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.1-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
 ![React](https://img.shields.io/badge/React-19-61DAFB)
@@ -44,6 +44,7 @@
 | **BAGEL-7B-MoT** | マルチモーダル | ByteDanceの統合モデル（生成・編集・理解） |
 | **Z-Image-Turbo** | 高速生成 | Tongyiの高速テキスト→画像生成 |
 | **FLUX.2 [dev]** | 最新生成 | Black Forest Labsの32B最先端モデル |
+| **FLUX.2 Klein 4B** | 軽量生成 | Black Forest Labsの軽量4Bモデル（FP8量子化、8GB VRAM対応） |
 
 ### ローカル専用モデル
 
