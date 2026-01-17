@@ -4,6 +4,7 @@ from diffusers import FluxPipeline
 import spaces
 from PIL import Image
 import numpy as np
+import traceback
 
 # モデル設定
 MODEL_ID = "black-forest-labs/FLUX.2-klein-4b-fp8"
@@ -16,13 +17,21 @@ def load_pipeline():
     """パイプラインを初期化"""
     global pipe
     if pipe is None:
-        print(f"Loading {MODEL_ID}...")
-        pipe = FluxPipeline.from_pretrained(
-            MODEL_ID,
-            torch_dtype=torch.bfloat16
-        )
-        pipe.to(DEVICE)
-        print("Model loaded successfully\!")
+        try:
+            print(f"Loading {MODEL_ID}...")
+            print(f"Device: {DEVICE}")
+            print(f"CUDA available: {torch.cuda.is_available()}")
+            
+            pipe = FluxPipeline.from_pretrained(
+                MODEL_ID,
+                torch_dtype=torch.bfloat16
+            )
+            pipe.to(DEVICE)
+            print("Model loaded successfully!")
+        except Exception as e:
+            print(f"ERROR loading model: {str(e)}")
+            print(traceback.format_exc())
+            raise gr.Error(f"モデルのロードに失敗しました: {str(e)}")
     return pipe
 
 @spaces.GPU(duration=120)
@@ -51,34 +60,48 @@ def generate_image(
     Returns:
         生成された画像
     """
-    if not prompt:
-        raise gr.Error("プロンプトを入力してください")
-    
-    # パイプラインロード
-    pipeline = load_pipeline()
-    
-    # シード設定
-    if seed == -1:
-        seed = np.random.randint(0, 2**32 - 1)
-    generator = torch.Generator(device=DEVICE).manual_seed(seed)
-    
-    # 画像生成
-    progress(0, desc="画像生成中...")
-    
-    result = pipeline(
-        prompt=prompt,
-        negative_prompt=negative_prompt if negative_prompt else None,
-        width=width,
-        height=height,
-        num_inference_steps=num_inference_steps,
-        guidance_scale=guidance_scale,
-        generator=generator
-    )
-    
-    image = result.images[0]
-    
-    print(f"Generated image with seed: {seed}")
-    return image
+    try:
+        if not prompt:
+            raise gr.Error("プロンプトを入力してください")
+        
+        print(f"\n=== Generation Request ===")
+        print(f"Prompt: {prompt}")
+        print(f"Size: {width}x{height}")
+        print(f"Steps: {num_inference_steps}")
+        print(f"Guidance: {guidance_scale}")
+        
+        # パイプラインロード
+        pipeline = load_pipeline()
+        
+        # シード設定
+        if seed == -1:
+            seed = np.random.randint(0, 2**32 - 1)
+        generator = torch.Generator(device=DEVICE).manual_seed(seed)
+        
+        # 画像生成
+        progress(0, desc="画像生成中...")
+        
+        result = pipeline(
+            prompt=prompt,
+            negative_prompt=negative_prompt if negative_prompt else None,
+            width=width,
+            height=height,
+            num_inference_steps=num_inference_steps,
+            guidance_scale=guidance_scale,
+            generator=generator
+        )
+        
+        image = result.images[0]
+        
+        print(f"Generated image with seed: {seed}")
+        return image
+        
+    except Exception as e:
+        error_msg = f"画像生成エラー: {str(e)}"
+        print(f"\n=== ERROR ===")
+        print(error_msg)
+        print(traceback.format_exc())
+        raise gr.Error(error_msg)
 
 # Gradio UI
 with gr.Blocks(theme=gr.themes.Soft(), title="FLUX.2 Klein 4B (FP8) - ZeroGPU") as demo:
