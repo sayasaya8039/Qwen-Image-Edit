@@ -1949,89 +1949,137 @@ async function callFlux2KleinAPI(
 ): Promise<string> {
 	console.log("Calling FLUX.2 Klein 4B API...");
 
-	// Gradio API呼び出し
-	const queueRes = await fetch(`${FLUX2_KLEIN_SPACE_URL}/gradio_api/call/generate_image`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			data: [
-				prompt, // prompt
-				negativePrompt || "", // negative_prompt
-				width, // width
-				height, // height
-				20, // num_inference_steps
-				3.5, // guidance_scale
-				-1, // seed (random)
-			],
-		}),
-	});
+	// タイムアウト設定（30秒）
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-	if (!queueRes.ok) {
-		const errorText = await queueRes.text();
-		console.error("FLUX.2 Klein queue error:", errorText);
-		throw new Error("FLUX.2 Klein APIへの接続に失敗しました");
-	}
+	try {
+		// Gradio API呼び出し
+		const queueRes = await fetch(`${FLUX2_KLEIN_SPACE_URL}/gradio_api/call/generate_image`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				data: [
+					prompt, // prompt
+					negativePrompt || "", // negative_prompt
+					width, // width
+					height, // height
+					20, // num_inference_steps
+					3.5, // guidance_scale
+					-1, // seed (random)
+				],
+			}),
+			signal: controller.signal,
+		});
 
-	const queueData = (await queueRes.json()) as { event_id: string };
-	const eventId = queueData.event_id;
+		clearTimeout(timeoutId);
 
-	// イベントストリームから結果を取得
-	const streamRes = await fetch(
-		`${FLUX2_KLEIN_SPACE_URL}/gradio_api/call/generate_image/${eventId}`,
-	);
+		if (!queueRes.ok) {
+			const errorText = await queueRes.text();
+			console.error("FLUX.2 Klein queue error:", errorText);
+			throw new Error("FLUX.2 Klein APIへの接続に失敗しました");
+		}
 
-	if (!streamRes.ok) {
-		throw new Error("FLUX.2 Klein結果の取得に失敗しました");
-	}
+		const queueData = (await queueRes.json()) as { event_id?: string };
+		
+		// event_id の存在確認
+		if (!queueData.event_id) {
+			console.error("FLUX.2 Klein: event_id not found in response", queueData);
+			throw new Error("APIがevent_idを返しませんでした");
+		}
+		
+		const eventId = queueData.event_id;
 
-	const text = await streamRes.text();
-	console.log("FLUX.2 Klein raw response:", text.substring(0, 500));
+		// イベントストリームから結果を取得（タイムアウト設定）
+		const streamController = new AbortController();
+		const streamTimeoutId = setTimeout(() => streamController.abort(), 60000); // 60秒
 
-	// エラーイベントのチェック
-	if (text.includes("event: error")) {
-		console.error(
-			"FLUX.2 Klein Space returned error event - likely ZeroGPU quota exceeded",
+		const streamRes = await fetch(
+			`${FLUX2_KLEIN_SPACE_URL}/gradio_api/call/generate_image/${eventId}`,
+			{ signal: streamController.signal },
 		);
-		throw new Error(
-			"FLUX.2 Klein SpaceのZeroGPU割り当てが一時的に枯渇しています。しばらく待ってから再試行してください。",
-		);
-	}
 
-	const lines = text.split("\n");
+		clearTimeout(streamTimeoutId);
 
-	for (const line of lines) {
-		if (line.startsWith("data: ")) {
-			try {
-				const jsonStr = line.slice(6);
-				if (jsonStr === "null") {
-					console.log("FLUX.2 Klein: data is null, skipping");
-					continue;
+		if (!streamRes.ok) {
+			throw new Error("FLUX.2 Klein結果の取得に失敗しました");
+		}
+
+		const text = await streamRes.text();
+		console.log("FLUX.2 Klein raw response:", text.substring(0, 500));
+
+		// エラーイベントのチェック（詳細抽出）
+		if (text.includes("event: error")) {
+			// エラーメッセージを抽出
+			const errorMatch = text.match(/data:\s*"(.+?)"/);
+			const errorMsg = errorMatch ? errorMatch[1] : "不明なエラー";
+			console.error("FLUX.2 Klein Space error:", errorMsg);
+			
+			// ZeroGPU quota エラーの場合は専用メッセージ
+			if (errorMsg.toLowerCase().includes("quota") || errorMsg.toLowerCase().includes("zerogpu")) {
+				throw new Error(
+					"FLUX.2 Klein SpaceのZeroGPU割り当てが一時的に枯渇しています。しばらく待ってから再試行してください。",
+				);
+			}
+			
+			throw new Error(`FLUX.2 Klein API エラー: ${errorMsg}`);
+		}
+
+		const lines = text.split("\n");
+
+		for (const line of lines) {
+			if (line.startsWith("data: ")) {
+				try {
+					const jsonStr = line.slice(6);
+					if (jsonStr === "null") {
+						console.log("FLUX.2 Klein: data is null, skipping");
+						continue;
+					}
+
+					// SSE パースの堅牢化（配列とオブジェクトの両方に対応）
+					const parsed = JSON.parse(jsonStr);
+					const data = Array.isArray(parsed) ? parsed : (parsed.data || []);
+					console.log("FLUX.2 Klein parsed data:", JSON.stringify(data).substring(0, 300));
+
+					// 画像URLを検出
+					let imageUrl: string | null = null;
+
+					// 結果は単一の画像 URL
+					if (typeof data[0] === "string" && data[0].startsWith("http")) {
+						console.log("FLUX.2 Klein: Found image URL");
+						imageUrl = data[0];
+					}
+					// または { url: string } 形式
+					else if (data[0] && typeof data[0] === "object" && "url" in data[0]) {
+						console.log("FLUX.2 Klein: Found image in object");
+						imageUrl = (data[0] as { url: string }).url;
+					}
+
+					// URL を base64 に変換して返す（他のAPIと統一）
+					if (imageUrl) {
+						console.log("FLUX.2 Klein: Converting URL to base64...");
+						const imageRes = await fetch(imageUrl);
+						const imageBuffer = await imageRes.arrayBuffer();
+						const base64 = arrayBufferToBase64(imageBuffer);
+						return `data:image/png;base64,${base64}`;
+					}
+				} catch (e) {
+					console.error("FLUX.2 Klein: Parse error:", e);
+					// パースエラーは無視して次の行へ
 				}
-
-				const data = JSON.parse(jsonStr) as unknown[];
-				console.log("FLUX.2 Klein parsed data:", JSON.stringify(data).substring(0, 300));
-
-				// 結果は単一の画像 URL
-				if (typeof data[0] === "string" && data[0].startsWith("http")) {
-					console.log("FLUX.2 Klein: Found image URL");
-					return data[0];
-				}
-
-				// または { url: string } 形式
-				if (data[0] && typeof data[0] === "object" && "url" in data[0]) {
-					const imageUrl = (data[0] as { url: string }).url;
-					console.log("FLUX.2 Klein: Found image in object");
-					return imageUrl;
-				}
-			} catch (e) {
-				// パースエラーは無視
 			}
 		}
-	}
 
-	throw new Error("FLUX.2 Klein画像の生成に失敗しました");
+		throw new Error("FLUX.2 Klein画像の生成に失敗しました");
+	} catch (error) {
+		clearTimeout(timeoutId);
+		if (error instanceof Error && error.name === "AbortError") {
+			throw new Error("FLUX.2 Klein API呼び出しがタイムアウトしました");
+		}
+		throw error;
+	}
 }
 
 // LTX-2 Video Generator API呼び出し
