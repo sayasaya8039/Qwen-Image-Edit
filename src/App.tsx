@@ -6,6 +6,7 @@ import { PropertiesPanel } from "./components/PropertiesPanel";
 import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
 import type { EditMode, GenerationStatus, ImageFile } from "./types";
+import { BenchmarkPanel } from "./components/BenchmarkPanel";
 
 // バックエンド名を日本語表示に変換
 function getBackendDisplayName(backend: string): string {
