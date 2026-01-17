@@ -1,201 +1,205 @@
 /**
  * ガウシアンブラーフィルター
- * GPU加速（HipScript/WebGPU）とCPUフォールバック（Canvas API）の両対応
+ * WebGPU compute shaderを使用した高速ガウシアンブラー実装
  */
-
-import { isWebGPUAvailable, getGPUCapabilities } from '../webgpu';
-import { isHipScriptAvailable, loadHipScript } from '../hipscript-loader';
 
 export interface GaussianBlurOptions {
-  radius: number; // ブラー半径（1-20）
-  sigma?: number; // ガウス分布の標準偏差（自動計算可）
-  useGPU?: boolean; // GPU使用を強制（デフォルト: 自動判定）
+  radius: number;
+  sigma?: number;
 }
 
-export interface BlurResult {
-  imageData: ImageData;
-  executionTime: number; // ミリ秒
-  method: 'gpu-hipscript' | 'gpu-webgpu' | 'cpu-canvas';
-}
+export class GaussianBlurFilter {
+  private device: GPUDevice | null = null;
+  private pipeline: GPUComputePipeline | null = null;
+  private initialized = false;
 
-/**
- * ガウシアンカーネルを生成
- */
-function generateGaussianKernel(radius: number, sigma: number): Float32Array {
-  const size = radius * 2 + 1;
-  const kernel = new Float32Array(size);
-  let sum = 0;
+  async initialize() {
+    if (this.initialized) return;
+    
+    if (!navigator.gpu) {
+      throw new Error('WebGPU not supported');
+    }
 
-  for (let i = 0; i < size; i++) {
-    const x = i - radius;
-    kernel[i] = Math.exp(-(x * x) / (2 * sigma * sigma));
-    sum += kernel[i];
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+      throw new Error('No GPU adapter found');
+    }
+
+    this.device = await adapter.requestDevice();
+    this.initialized = true;
   }
 
-  // 正規化
-  for (let i = 0; i < size; i++) {
-    kernel[i] /= sum;
+  async apply(
+    imageData: ImageData,
+    options: GaussianBlurOptions
+  ): Promise<ImageData> {
+    await this.initialize();
+    if (!this.device) throw new Error('Device not initialized');
+
+    const { radius, sigma = radius / 3 } = options;
+    
+    const kernelSize = radius * 2 + 1;
+    const kernel = this.generateGaussianKernel(kernelSize, sigma);
+
+    const tempData = await this.applyPass(imageData, kernel, true);
+    const result = await this.applyPass(tempData, kernel, false);
+
+    return result;
   }
 
-  return kernel;
-}
+  private generateGaussianKernel(size: number, sigma: number): Float32Array {
+    const kernel = new Float32Array(size);
+    const center = Math.floor(size / 2);
+    let sum = 0;
 
-/**
- * CPUフォールバック: Canvas APIを使用したガウシアンブラー
- */
-async function applyCPUBlur(
-  imageData: ImageData,
-  options: GaussianBlurOptions
-): Promise<BlurResult> {
-  const startTime = performance.now();
-  const { radius } = options;
-  const sigma = options.sigma ?? radius / 3;
+    for (let i = 0; i < size; i++) {
+      const x = i - center;
+      kernel[i] = Math.exp(-(x * x) / (2 * sigma * sigma));
+      sum += kernel[i];
+    }
 
-  const { width, height, data } = imageData;
-  const kernel = generateGaussianKernel(radius, sigma);
-  const output = new Uint8ClampedArray(data.length);
+    for (let i = 0; i < size; i++) {
+      kernel[i] /= sum;
+    }
 
-  // 水平方向のブラー
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let r = 0,
-        g = 0,
-        b = 0,
-        a = 0;
+    return kernel;
+  }
 
-      for (let kx = -radius; kx <= radius; kx++) {
-        const px = Math.min(Math.max(x + kx, 0), width - 1);
-        const idx = (y * width + px) * 4;
-        const weight = kernel[kx + radius];
+  private async applyPass(
+    imageData: ImageData,
+    kernel: Float32Array,
+    horizontal: boolean
+  ): Promise<ImageData> {
+    if (!this.device) throw new Error('Device not initialized');
 
-        r += data[idx] * weight;
-        g += data[idx + 1] * weight;
-        b += data[idx + 2] * weight;
-        a += data[idx + 3] * weight;
+    const { width, height, data } = imageData;
+
+    const inputBuffer = this.device.createBuffer({
+      size: data.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      mappedAtCreation: true
+    });
+    new Uint8Array(inputBuffer.getMappedRange()).set(data);
+    inputBuffer.unmap();
+
+    const outputBuffer = this.device.createBuffer({
+      size: data.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+    });
+
+    const kernelBuffer = this.device.createBuffer({
+      size: kernel.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      mappedAtCreation: true
+    });
+    new Float32Array(kernelBuffer.getMappedRange()).set(kernel);
+    kernelBuffer.unmap();
+
+    const shaderModule = this.device.createShaderModule({
+      code: this.getShaderCode(horizontal, kernel.length)
+    });
+
+    const pipeline = this.device.createComputePipeline({
+      layout: 'auto',
+      compute: {
+        module: shaderModule,
+        entryPoint: 'main'
       }
+    });
 
-      const outIdx = (y * width + x) * 4;
-      output[outIdx] = r;
-      output[outIdx + 1] = g;
-      output[outIdx + 2] = b;
-      output[outIdx + 3] = a;
-    }
+    const bindGroup = this.device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: inputBuffer } },
+        { binding: 1, resource: { buffer: outputBuffer } },
+        { binding: 2, resource: { buffer: kernelBuffer } }
+      ]
+    });
+
+    const commandEncoder = this.device.createCommandEncoder();
+    const passEncoder = commandEncoder.beginComputePass();
+    passEncoder.setPipeline(pipeline);
+    passEncoder.setBindGroup(0, bindGroup);
+    passEncoder.dispatchWorkgroups(
+      Math.ceil(width / 8),
+      Math.ceil(height / 8)
+    );
+    passEncoder.end();
+
+    const readBuffer = this.device.createBuffer({
+      size: data.byteLength,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+    });
+
+    commandEncoder.copyBufferToBuffer(
+      outputBuffer,
+      0,
+      readBuffer,
+      0,
+      data.byteLength
+    );
+
+    this.device.queue.submit([commandEncoder.finish()]);
+
+    await readBuffer.mapAsync(GPUMapMode.READ);
+    const resultData = new Uint8ClampedArray(
+      readBuffer.getMappedRange()
+    ).slice();
+    readBuffer.unmap();
+
+    inputBuffer.destroy();
+    outputBuffer.destroy();
+    kernelBuffer.destroy();
+    readBuffer.destroy();
+
+    return new ImageData(resultData, width, height);
   }
 
-  // 垂直方向のブラー
-  const finalData = new Uint8ClampedArray(data.length);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let r = 0,
-        g = 0,
-        b = 0,
-        a = 0;
+  private getShaderCode(horizontal: boolean, kernelSize: number): string {
+    const direction = horizontal ? 'vec2<i32>(x, 0)' : 'vec2<i32>(0, y)';
+    const kernelRadius = Math.floor(kernelSize / 2);
+    
+    return `
+      @group(0) @binding(0) var<storage, read> input: array<vec4<f32>>;
+      @group(0) @binding(1) var<storage, read_write> output: array<vec4<f32>>;
+      @group(0) @binding(2) var<storage, read> kernel: array<f32>;
 
-      for (let ky = -radius; ky <= radius; ky++) {
-        const py = Math.min(Math.max(y + ky, 0), height - 1);
-        const idx = (py * width + x) * 4;
-        const weight = kernel[ky + radius];
+      @compute @workgroup_size(8, 8)
+      fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+        let width = 1024u;
+        let height = 1024u;
+        let idx = id.y * width + id.x;
 
-        r += output[idx] * weight;
-        g += output[idx + 1] * weight;
-        b += output[idx + 2] * weight;
-        a += output[idx + 3] * weight;
+        if (id.x >= width || id.y >= height) {
+          return;
+        }
+
+        var sum = vec4<f32>(0.0);
+        let kernelRadius = ${kernelRadius};
+
+        for (var i = -kernelRadius; i <= kernelRadius; i = i + 1) {
+          let offset = ${direction.replace('x', 'i').replace('y', 'i')};
+          let sampleIdx = clamp(
+            i32(id.y) + offset.y,
+            0,
+            i32(height) - 1
+          ) * i32(width) + clamp(
+            i32(id.x) + offset.x,
+            0,
+            i32(width) - 1
+          );
+          
+          sum = sum + input[sampleIdx] * kernel[i + kernelRadius];
+        }
+
+        output[idx] = sum;
       }
-
-      const outIdx = (y * width + x) * 4;
-      finalData[outIdx] = r;
-      finalData[outIdx + 1] = g;
-      finalData[outIdx + 2] = b;
-      finalData[outIdx + 3] = a;
-    }
+    `;
   }
 
-  const executionTime = performance.now() - startTime;
-
-  return {
-    imageData: new ImageData(finalData, width, height),
-    executionTime,
-    method: 'cpu-canvas',
-  };
-}
-
-/**
- * GPUフォールバック: WebGPU Compute Shaderを使用したガウシアンブラー
- * （HipScriptが利用不可の場合）
- */
-async function applyWebGPUBlur(
-  imageData: ImageData,
-  options: GaussianBlurOptions
-): Promise<BlurResult> {
-  const startTime = performance.now();
-
-  // TODO: 実際のWebGPU Compute Shader実装
-  console.warn('[GaussianBlur] WebGPU blur not yet implemented, falling back to CPU');
-
-  // 現時点ではCPUフォールバック
-  return applyCPUBlur(imageData, options);
-}
-
-/**
- * HipScriptを使用したGPU加速ガウシアンブラー
- */
-async function applyHipScriptBlur(
-  imageData: ImageData,
-  options: GaussianBlurOptions
-): Promise<BlurResult> {
-  const startTime = performance.now();
-
-  // TODO: 実際のHipScript CUDA/HIP実装
-  console.warn('[GaussianBlur] HipScript blur not yet implemented, falling back to CPU');
-
-  // 現時点ではCPUフォールバック
-  return applyCPUBlur(imageData, options);
-}
-
-/**
- * ガウシアンブラーを適用（自動的に最適な方法を選択）
- */
-export async function applyGaussianBlur(
-  imageData: ImageData,
-  options: GaussianBlurOptions
-): Promise<BlurResult> {
-  const { useGPU } = options;
-
-  // GPU使用を強制する場合、またはGPU利用可能な場合
-  if (useGPU !== false) {
-    // HipScript優先
-    if (isHipScriptAvailable()) {
-      console.log('[GaussianBlur] Using HipScript GPU acceleration');
-      return applyHipScriptBlur(imageData, options);
-    }
-
-    // WebGPU次点
-    if (isWebGPUAvailable()) {
-      console.log('[GaussianBlur] Using WebGPU acceleration');
-      return applyWebGPUBlur(imageData, options);
-    }
+  destroy() {
+    this.device = null;
+    this.pipeline = null;
+    this.initialized = false;
   }
-
-  // CPUフォールバック
-  console.log('[GaussianBlur] Using CPU fallback');
-  return applyCPUBlur(imageData, options);
-}
-
-/**
- * 初期化: WebGPU/HipScriptを事前ロード
- */
-export async function initializeGPUBlur(): Promise<{
-  webgpuAvailable: boolean;
-  hipscriptAvailable: boolean;
-}> {
-  const webgpuAvailable = isWebGPUAvailable();
-  
-  // HipScriptをバックグラウンドでロード試行
-  let hipscriptAvailable = false;
-  if (webgpuAvailable) {
-    const hipscript = await loadHipScript();
-    hipscriptAvailable = hipscript !== null;
-  }
-
-  return { webgpuAvailable, hipscriptAvailable };
 }

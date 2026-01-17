@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.1.1-blue)
+![Version](https://img.shields.io/badge/version-1.2.1-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
 ![React](https://img.shields.io/badge/React-19-61DAFB)
@@ -119,40 +119,39 @@ bun run dev
 ```
 
 
-## 🚀 GPU加速（HipScript統合 - 実験的機能）
+## 🚀 GPU加速（WebGPU基盤 - v1.2系）
 
-**v1.2.0より**: WebGPU/HipScriptによるGPU加速処理の基盤を追加しました（実験的機能）。
-
-### HipScript技術
-
-2025年1月に発表された[HipScript](https://github.com/lights0123/hipscript/)により、CUDA/HIPコードをブラウザで実行可能になりました：
-
-- **技術**: CUDA → WebAssembly + WebGPU 変換
-- **対応GPU**: NVIDIA CUDA, AMD HIP
-- **パイプライン**: chipStar → Clspv → Tint → WGSL
-- **用途**: 画像フィルター処理の高速化
+**v1.2.0より**: WebGPUによるGPU加速処理の基盤を追加しました。
 
 ### 現在の実装状況
 
 | 機能 | 状態 | 説明 |
 |------|------|------|
 | **WebGPU検出** | ✅ 実装済み | ブラウザのWebGPU対応を自動検出 |
-| **HipScriptローダー** | ✅ 実装済み（プレースホルダー） | 将来の統合に向けた基盤 |
-| **ガウシアンブラー** | ✅ 実装済み（CPUフォールバック） | GPU加速準備完了 |
-| **エッジ検出** | 🚧 計画中 | 次期バージョンで実装予定 |
-| **色調補正** | 🚧 計画中 | 次期バージョンで実装予定 |
+| **ガウシアンブラー（CPU）** | ✅ 実装済み | 高速CPU実装（分離可能畳み込み） |
+| **ガウシアンブラー（GPU）** | 🚧 開発中 | WebGPU Compute Shader実装予定 |
+| **エッジ検出** | 📋 計画中 | v1.3以降で実装予定 |
+| **色調補正** | 📋 計画中 | v1.3以降で実装予定 |
 
 ### フォールバック機構
 
 WebGPU非対応ブラウザでも動作するよう、自動フォールバックを実装：
 
 ```
-GPU加速（HipScript/WebGPU）
+WebGPU（GPU加速）
     ↓ 利用不可の場合
 WebAssembly（AssemblyScript）
     ↓ 利用不可の場合
 JavaScript（Canvas API）
 ```
+
+### 将来の計画：HipScript統合
+
+[HipScript](https://github.com/lights0123/hipscript/)（2025年1月発表）により、CUDA/HIPコードをブラウザで実行可能になりました。v1.3以降でCUDA→WGSL変換統合を検討中：
+
+- **技術**: CUDA → WebAssembly + WebGPU
+- **パイプライン**: chipStar → Clspv → Tint → WGSL
+- **メリット**: 既存CUDAライブラリ活用可能
 
 ### ブラウザ互換性
 
