@@ -7,6 +7,7 @@ import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
 import type { EditMode, GenerationStatus, ImageFile } from "./types";
 import { BenchmarkPanel } from "./components/BenchmarkPanel";
+import { CudaKernelEditor } from "./components/CudaKernelEditor";
 
 // バックエンド名を日本語表示に変換
 function getBackendDisplayName(backend: string): string {
@@ -309,40 +310,49 @@ export default function App() {
 				{/* 左サイドバー - ツールバー */}
 				<Toolbar editMode={editMode} onModeChange={setEditMode} />
 
-				{/* メインキャンバスエリア */}
-				<div className="flex-1 flex flex-col">
-					<ImageCanvas
-						images={images}
-						outputImage={outputImage}
-						outputVideo={outputVideo}
-						onAddImage={handleAddImage}
-						onRemoveImage={handleRemoveImage}
-						onToggleImage={handleToggleImage}
-						onClearImages={handleClearImages}
-						status={status}
-					/>
-				</div>
+				{/* メインコンテンツエリア */}
+				{editMode === "cuda" ? (
+					<div className="flex-1 p-6 overflow-auto">
+						<CudaKernelEditor />
+					</div>
+				) : (
+					<>
+						{/* メインキャンバスエリア */}
+						<div className="flex-1 flex flex-col">
+							<ImageCanvas
+								images={images}
+								outputImage={outputImage}
+								outputVideo={outputVideo}
+								onAddImage={handleAddImage}
+								onRemoveImage={handleRemoveImage}
+								onToggleImage={handleToggleImage}
+								onClearImages={handleClearImages}
+								status={status}
+							/>
+						</div>
 
-				{/* 右サイドバー - プロパティパネル */}
-				<PropertiesPanel
-					prompt={prompt}
-					negativePrompt={negativePrompt}
-					editMode={editMode}
-					imageCount={images.length}
-					enabledImageCount={images.filter((img) => img.enabled).length}
-					aspectRatio={aspectRatio}
-					resolution={resolution}
-					models={models}
-					selectedModelId={selectedModelId}
-					backendType={backendType}
-					onPromptChange={setPrompt}
-					onNegativePromptChange={setNegativePrompt}
-					onAspectRatioChange={setAspectRatio}
-					onResolutionChange={setResolution}
-					onModelChange={setSelectedModelId}
-					onGenerate={handleGenerate}
-					isProcessing={status.isProcessing}
-				/>
+						{/* 右サイドバー - プロパティパネル */}
+						<PropertiesPanel
+							prompt={prompt}
+							negativePrompt={negativePrompt}
+							editMode={editMode}
+							imageCount={images.length}
+							enabledImageCount={images.filter((img) => img.enabled).length}
+							aspectRatio={aspectRatio}
+							resolution={resolution}
+							models={models}
+							selectedModelId={selectedModelId}
+							backendType={backendType}
+							onPromptChange={setPrompt}
+							onNegativePromptChange={setNegativePrompt}
+							onAspectRatioChange={setAspectRatio}
+							onResolutionChange={setResolution}
+							onModelChange={setSelectedModelId}
+							onGenerate={handleGenerate}
+							isProcessing={status.isProcessing}
+						/>
+					</>
+				)}
 			</div>
 
 			{/* ステータスバー */}

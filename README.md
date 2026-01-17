@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue)
+![Version](https://img.shields.io/badge/version-1.4.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
 ![React](https://img.shields.io/badge/React-19-61DAFB)
@@ -32,6 +32,7 @@
 | **生成** | プロンプトから新規画像を生成 | 0枚 |
 | **編集** | 画像をプロンプトに従って編集 | 1枚 |
 | **合成** | 複数画像を組み合わせて新画像を生成 | 2枚以上 |
+| **CUDA** | CUDAカーネルをWebGPUで実行 | なし |
 | **超解像度** | 画像を4倍にアップスケール | 1枚 |
 
 ## 🤖 対応モデル
@@ -61,8 +62,10 @@
 ```
 フロントエンド: React 19 + TypeScript + Tailwind CSS + Vite
 WebAssembly:   AssemblyScript（画像処理高速化）
+WebGPU:        Compute Shaders（CUDA互換実行環境）
 バックエンド:   Hono (Bun / Cloudflare Workers)
 AIモデル:       HuggingFace Spaces / ローカルPython
+CUDA変換:       HipScript（CUDA→WebGPU）
 デプロイ:       Cloudflare Workers + KV Storage
 ```
 

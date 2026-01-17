@@ -5,7 +5,7 @@ export interface ImageFile {
 	enabled: boolean; // 生成時に使用するかどうか
 }
 
-export type EditMode = "generate" | "edit" | "combine";
+export type EditMode = "generate" | "edit" | "combine" | "cuda";
 
 export interface GenerationStatus {
 	isProcessing: boolean;
