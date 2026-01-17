@@ -118,6 +118,51 @@ bun run dev
 バンドラー:  Vite + vite-plugin-wasm
 ```
 
+
+## 🚀 GPU加速（HipScript統合 - 実験的機能）
+
+**v1.2.0より**: WebGPU/HipScriptによるGPU加速処理の基盤を追加しました（実験的機能）。
+
+### HipScript技術
+
+2025年1月に発表された[HipScript](https://github.com/lights0123/hipscript/)により、CUDA/HIPコードをブラウザで実行可能になりました：
+
+- **技術**: CUDA → WebAssembly + WebGPU 変換
+- **対応GPU**: NVIDIA CUDA, AMD HIP
+- **パイプライン**: chipStar → Clspv → Tint → WGSL
+- **用途**: 画像フィルター処理の高速化
+
+### 現在の実装状況
+
+| 機能 | 状態 | 説明 |
+|------|------|------|
+| **WebGPU検出** | ✅ 実装済み | ブラウザのWebGPU対応を自動検出 |
+| **HipScriptローダー** | ✅ 実装済み（プレースホルダー） | 将来の統合に向けた基盤 |
+| **ガウシアンブラー** | ✅ 実装済み（CPUフォールバック） | GPU加速準備完了 |
+| **エッジ検出** | 🚧 計画中 | 次期バージョンで実装予定 |
+| **色調補正** | 🚧 計画中 | 次期バージョンで実装予定 |
+
+### フォールバック機構
+
+WebGPU非対応ブラウザでも動作するよう、自動フォールバックを実装：
+
+```
+GPU加速（HipScript/WebGPU）
+    ↓ 利用不可の場合
+WebAssembly（AssemblyScript）
+    ↓ 利用不可の場合
+JavaScript（Canvas API）
+```
+
+### ブラウザ互換性
+
+| ブラウザ | WebGPU対応 | 状態 |
+|---------|-----------|------|
+| Chrome 113+ | ✅ 対応 | GPU加速利用可 |
+| Edge 113+ | ✅ 対応 | GPU加速利用可 |
+| Safari 18+ | ✅ 対応 | GPU加速利用可 |
+| Firefox | ⚠️ 実験的 | フォールバック動作 |
+
 ## 🚀 クイックスタート
 
 ### オンライン版（推奨）
