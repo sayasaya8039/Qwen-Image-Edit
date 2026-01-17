@@ -32,3 +32,9 @@ export interface BackendStatus {
 	modelLoaded: boolean;
 	lastCheck: number;
 }
+
+export interface CudaProcessingConfig {
+	enabled: boolean;
+	preprocessing?: string; // WGSL code for preprocessing
+	postprocessing?: string; // WGSL code for postprocessing
+}

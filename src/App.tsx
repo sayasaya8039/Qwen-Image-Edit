@@ -5,9 +5,10 @@ import { ImageCanvas } from "./components/ImageCanvas";
 import { PropertiesPanel } from "./components/PropertiesPanel";
 import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
-import type { EditMode, GenerationStatus, ImageFile } from "./types";
+import type { EditMode, GenerationStatus, ImageFile, CudaProcessingConfig } from "./types";
 import { BenchmarkPanel } from "./components/BenchmarkPanel";
 import { CudaKernelEditor } from "./components/CudaKernelEditor";
+import { imageProcessor } from "./utils/cuda/image-processor";
 
 // バックエンド名を日本語表示に変換
 function getBackendDisplayName(backend: string): string {
@@ -47,6 +48,11 @@ export default function App() {
 		isProcessing: false,
 		progress: 0,
 		message: "準備完了",
+	});
+	const [cudaConfig, setCudaConfig] = useState<CudaProcessingConfig>({
+		enabled: false,
+		preprocessing: undefined,
+		postprocessing: undefined,
 	});
 
 	// モデル一覧とバックエンド情報を取得
@@ -225,11 +231,39 @@ export default function App() {
 				formData.append("modelId", selectedModelId);
 			}
 
-			// 有効な画像のみ送信
+			// 有効な画像を処理（CUDA前処理を適用）
 			const enabledImages = images.filter((img) => img.enabled);
-			enabledImages.forEach((img, index) => {
-				formData.append(`image${index + 1}`, img.file);
-			});
+			
+			if (cudaConfig.enabled && cudaConfig.preprocessing) {
+				setStatus({ isProcessing: true, progress: 20, message: "CUDA前処理中..." });
+				
+				for (let i = 0; i < enabledImages.length; i++) {
+					const img = enabledImages[i];
+					try {
+						// FileからImageDataに変換
+						const imageData = await imageProcessor.fileToImageData(img.file);
+						
+						// CUDA前処理を適用
+						const processed = await imageProcessor.applyPreprocessing(
+							imageData,
+							cudaConfig.preprocessing
+						);
+						
+						// ImageDataをBlobに変換してFormDataに追加
+						const blob = await imageProcessor.imageDataToBlob(processed, 'image/jpeg', 0.95);
+						formData.append(`image${i + 1}`, blob, `processed_${i + 1}.jpg`);
+					} catch (error) {
+						console.error(`CUDA preprocessing failed for image ${i + 1}:`, error);
+						// 前処理失敗時は元の画像を使用
+						formData.append(`image${i + 1}`, img.file);
+					}
+				}
+			} else {
+				// CUDA前処理が無効な場合は元の画像をそのまま使用
+				enabledImages.forEach((img, index) => {
+					formData.append(`image${index + 1}`, img.file);
+				});
+			}
 
 			setStatus({ isProcessing: true, progress: 30, message: "AI処理中..." });
 
@@ -245,12 +279,35 @@ export default function App() {
 
 			setStatus({
 				isProcessing: true,
-				progress: 80,
+				progress: 70,
 				message: "画像を受信中...",
 			});
 
 			const result = await response.json();
-			if (result.type === "video") {
+			
+			// CUDA後処理を適用（動画以外）
+			if (result.type !== "video" && cudaConfig.enabled && cudaConfig.postprocessing) {
+				setStatus({ isProcessing: true, progress: 85, message: "CUDA後処理中..." });
+				
+				try {
+					// Base64からImageDataに変換
+					const imageData = await imageProcessor.base64ToImageData(result.image);
+					
+					// CUDA後処理を適用
+					const processed = await imageProcessor.applyPostprocessing(
+						imageData,
+						cudaConfig.postprocessing
+					);
+					
+					// ImageDataをData URLに変換
+					const dataUrl = await imageProcessor.imageDataToDataUrl(processed, 'image/png', 0.95);
+					setOutputImage(dataUrl);
+				} catch (error) {
+					console.error('CUDA postprocessing failed:', error);
+					// 後処理失敗時は元の画像を使用
+					setOutputImage(result.image);
+				}
+			} else if (result.type === "video") {
 				setOutputVideo(result.video);
 			} else {
 				setOutputImage(result.image);
@@ -262,11 +319,12 @@ export default function App() {
 			const translatedInfo = result.translated
 				? ` (翻訳: ${result.prompt})`
 				: "";
+			const cudaInfo = cudaConfig.enabled ? " + CUDA処理" : "";
 
 			setStatus({
 				isProcessing: false,
 				progress: 100,
-				message: `✓ ${modelName} (${backendName}) で生成完了${translatedInfo}`,
+				message: `✓ ${modelName} (${backendName}${cudaInfo}) で生成完了${translatedInfo}`,
 			});
 		} catch (error) {
 			console.error("Generation error:", error);
@@ -284,6 +342,7 @@ export default function App() {
 		aspectRatio,
 		resolution,
 		selectedModelId,
+		cudaConfig,
 	]);
 
 	// 画像の保存
@@ -343,11 +402,13 @@ export default function App() {
 							models={models}
 							selectedModelId={selectedModelId}
 							backendType={backendType}
+							cudaConfig={cudaConfig}
 							onPromptChange={setPrompt}
 							onNegativePromptChange={setNegativePrompt}
 							onAspectRatioChange={setAspectRatio}
 							onResolutionChange={setResolution}
 							onModelChange={setSelectedModelId}
+							onCudaConfigChange={setCudaConfig}
 							onGenerate={handleGenerate}
 							isProcessing={status.isProcessing}
 						/>

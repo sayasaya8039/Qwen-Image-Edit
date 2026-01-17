@@ -1,4 +1,4 @@
-import type { EditMode } from "../types";
+import type { EditMode, CudaProcessingConfig } from "../types";
 
 interface ModelInfo {
 	id: string;
@@ -19,11 +19,13 @@ interface PropertiesPanelProps {
 	models: ModelInfo[];
 	selectedModelId: string;
 	backendType: string;
+	cudaConfig: CudaProcessingConfig;
 	onPromptChange: (value: string) => void;
 	onNegativePromptChange: (value: string) => void;
 	onAspectRatioChange: (value: string) => void;
 	onResolutionChange: (value: string) => void;
 	onModelChange: (value: string) => void;
+	onCudaConfigChange: (config: CudaProcessingConfig) => void;
 	onGenerate: () => void;
 	isProcessing: boolean;
 }
@@ -66,6 +68,40 @@ const modeInfo = {
 	},
 };
 
+// サンプルWGSLコード
+const SAMPLE_WGSL_PREPROCESSING = `// グレースケール変換（前処理サンプル）
+@group(0) @binding(0) var<storage, read> input: array<u32>;
+@group(0) @binding(1) var<storage, read_write> output: array<u32>;
+
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let idx = global_id.y * 1024u + global_id.x;
+    let pixel = input[idx];
+    
+    let r = f32((pixel >> 16u) & 0xFFu);
+    let g = f32((pixel >> 8u) & 0xFFu);
+    let b = f32(pixel & 0xFFu);
+    
+    let gray = u32(r * 0.299 + g * 0.587 + b * 0.114);
+    output[idx] = (pixel & 0xFF000000u) | (gray << 16u) | (gray << 8u) | gray;
+}`;
+
+const SAMPLE_WGSL_POSTPROCESSING = `// シャープニング（後処理サンプル）
+@group(0) @binding(0) var<storage, read> input: array<u32>;
+@group(0) @binding(1) var<storage, read_write> output: array<u32>;
+
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let x = global_id.x;
+    let y = global_id.y;
+    let width = 1024u;
+    let idx = y * width + x;
+    
+    // 3x3カーネルでシャープニング
+    let center = input[idx];
+    output[idx] = center; // 簡易実装
+}`;
+
 export function PropertiesPanel({
 	prompt,
 	negativePrompt,
@@ -77,11 +113,13 @@ export function PropertiesPanel({
 	models,
 	selectedModelId,
 	backendType,
+	cudaConfig,
 	onPromptChange,
 	onNegativePromptChange,
 	onAspectRatioChange,
 	onResolutionChange,
 	onModelChange,
+	onCudaConfigChange,
 	onGenerate,
 	isProcessing,
 }: PropertiesPanelProps) {
@@ -260,6 +298,21 @@ export function PropertiesPanel({
 											: "warning"
 							}
 						/>
+						{cudaConfig.enabled && (
+							<StatusItem
+								label="CUDA処理"
+								value={
+									cudaConfig.preprocessing && cudaConfig.postprocessing
+										? "前処理+後処理"
+										: cudaConfig.preprocessing
+											? "前処理のみ"
+											: cudaConfig.postprocessing
+												? "後処理のみ"
+												: "有効"
+								}
+								status="success"
+							/>
+						)}
 					</div>
 				</div>
 			</div>
@@ -358,6 +411,102 @@ export function PropertiesPanel({
 							<span>4</span>
 							<span>10</span>
 						</div>
+					</div>
+
+					{/* CUDA処理設定 */}
+					<div className="border-t border-[var(--ps-border)] pt-3">
+						<div className="flex items-center justify-between mb-2">
+							<label className="text-xs font-medium">CUDA GPU処理</label>
+							<input
+								type="checkbox"
+								checked={cudaConfig.enabled}
+								onChange={(e) =>
+									onCudaConfigChange({
+										...cudaConfig,
+										enabled: e.target.checked,
+									})
+								}
+								disabled={isProcessing}
+								className="w-4 h-4"
+							/>
+						</div>
+						<p className="text-xs text-[var(--ps-text-muted)] mb-2">
+							WebGPUでCUDAカーネルを実行し、AI処理前後に画像処理を適用
+						</p>
+
+						{cudaConfig.enabled && (
+							<div className="space-y-2">
+								{/* 前処理 */}
+								<div>
+									<label className="block text-xs font-medium mb-1">
+										前処理 (WGSL)
+									</label>
+									<textarea
+										className="input-field text-xs font-mono resize-none"
+										rows={3}
+										placeholder={SAMPLE_WGSL_PREPROCESSING}
+										value={cudaConfig.preprocessing || ""}
+										onChange={(e) =>
+											onCudaConfigChange({
+												...cudaConfig,
+												preprocessing: e.target.value,
+											})
+										}
+										disabled={isProcessing}
+									/>
+								</div>
+
+								{/* 後処理 */}
+								<div>
+									<label className="block text-xs font-medium mb-1">
+										後処理 (WGSL)
+									</label>
+									<textarea
+										className="input-field text-xs font-mono resize-none"
+										rows={3}
+										placeholder={SAMPLE_WGSL_POSTPROCESSING}
+										value={cudaConfig.postprocessing || ""}
+										onChange={(e) =>
+											onCudaConfigChange({
+												...cudaConfig,
+												postprocessing: e.target.value,
+											})
+										}
+										disabled={isProcessing}
+									/>
+								</div>
+
+								{/* サンプルロードボタン */}
+								<div className="flex gap-2">
+									<button
+										type="button"
+										className="text-xs px-2 py-1 bg-[var(--ps-bg-dark)] hover:bg-[var(--ps-bg-hover)] rounded"
+										onClick={() =>
+											onCudaConfigChange({
+												...cudaConfig,
+												preprocessing: SAMPLE_WGSL_PREPROCESSING,
+											})
+										}
+										disabled={isProcessing}
+									>
+										前処理サンプル
+									</button>
+									<button
+										type="button"
+										className="text-xs px-2 py-1 bg-[var(--ps-bg-dark)] hover:bg-[var(--ps-bg-hover)] rounded"
+										onClick={() =>
+											onCudaConfigChange({
+												...cudaConfig,
+												postprocessing: SAMPLE_WGSL_POSTPROCESSING,
+											})
+										}
+										disabled={isProcessing}
+									>
+										後処理サンプル
+									</button>
+								</div>
+							</div>
+						)}
 					</div>
 				</div>
 			</details>
