@@ -31,6 +31,7 @@ const BAGEL_SPACE_URL = 'https://bytedance-seed-bagel.hf.space'
 const ZIMAGE_SPACE_URL = 'https://tongyi-mai-z-image-turbo.hf.space'
 const FLUX2_SPACE_URL = 'https://black-forest-labs-flux-2-dev.hf.space'
 const FLUX2_LOCAL_URL = process.env.FLUX2_LOCAL_URL || 'http://localhost:3005'
+const LTX2_SPACE_URL = 'https://sayasaya11-ltx-2-video.hf.space'
 
 // バックエンドの状態
 interface BackendStatus {
@@ -327,6 +328,15 @@ app.post('/api/generate', async (c) => {
       // BAGEL INT8量子化版
       result = await callBagelInt8API(prompt, image1)
       usedBackend = 'bagel-int8'
+    } else if (modelId === 'ltx-2-video') {
+      // LTX-2 Video Generator
+      const videoResult = await callLtx2CloudAPI(prompt, negativePrompt)
+      return c.json({
+        video: videoResult,
+        backend: 'ltx2-cloud',
+        modelId,
+        type: 'video',
+      })
     } else {
       // Qwen系モデルを使用
       // バックエンドを確認
@@ -1092,6 +1102,77 @@ async function callBagelInt8API(prompt: string, image: File | null): Promise<str
 
   const data = await res.json()
   return data.image
+}
+
+// LTX-2 Video Generator API呼び出し
+async function callLtx2CloudAPI(prompt: string, negativePrompt: string): Promise<string> {
+  console.log('Calling LTX-2 Video Generator API...')
+
+  // Gradio API呼び出し
+  const queueRes = await fetch(`${LTX2_SPACE_URL}/gradio_api/call/generate_video`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: [
+        prompt,           // prompt
+        negativePrompt || 'worst quality, inconsistent motion, blurry, jittery, distorted', // negative_prompt
+        512,              // width
+        320,              // height
+        49,               // num_frames (2秒 @24fps)
+        30,               // num_inference_steps
+        4.0,              // guidance_scale
+        -1,               // seed (-1 = random)
+      ],
+    }),
+  })
+
+  if (!queueRes.ok) {
+    const errorText = await queueRes.text()
+    console.error('LTX-2 queue error:', errorText)
+    throw new Error('LTX-2 APIへの接続に失敗しました')
+  }
+
+  const queueData = await queueRes.json()
+  const eventId = queueData.event_id
+
+  // イベントストリームから結果を取得
+  const streamRes = await fetch(`${LTX2_SPACE_URL}/gradio_api/call/generate_video/${eventId}`)
+
+  if (!streamRes.ok) {
+    throw new Error('LTX-2結果の取得に失敗しました')
+  }
+
+  const text = await streamRes.text()
+  const lines = text.split('\n')
+
+  for (const line of lines) {
+    if (line.startsWith('data: ')) {
+      try {
+        const data = JSON.parse(line.slice(6))
+        // data[0] がビデオ、data[1] がステータス
+        if (Array.isArray(data) && data[0]) {
+          const videoData = data[0]
+          if (typeof videoData === 'object' && videoData.url) {
+            // Gradio file response format
+            return videoData.url
+          }
+          if (typeof videoData === 'string') {
+            if (videoData.startsWith('data:')) {
+              return videoData
+            }
+            // URL形式の場合はそのまま返す
+            return videoData
+          }
+        }
+      } catch (e) {
+        // パース失敗、次の行を試す
+      }
+    }
+  }
+
+  throw new Error('LTX-2からビデオを取得できませんでした')
 }
 
 // ============================

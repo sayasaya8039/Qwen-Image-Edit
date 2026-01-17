@@ -8,6 +8,7 @@
       "Bash(bunx playwright *)",
       "Bash(cargo *)",
       "Bash(code *)",
+      "Bash(codex-fetch *)",
       "Bash(cp *)",
       "Bash(crx3 *)",
       "Bash(cursor *)",
@@ -62,7 +63,14 @@
       "TodoWrite",
       "WebFetch",
       "WebSearch",
-      "Write(*)"
+      "Write(*)",
+      "Bash(antigravity *)",
+      "Bash(ralph *)",
+      "Bash(safe-write *)",
+      "Bash(bnmp *)",
+      "Bash(zig *)",
+      "Bash(sw *)",
+      "Bash(agent-browser *)"
     ],
     "deny": [
       "Bash(rm -rf /)",
@@ -71,11 +79,102 @@
       "Bash(> /dev/sda)",
       "Bash(:(){:|:&};:)",
       "Bash(mkfs*)",
-      "Bash(dd if=*)"
+      "Bash(dd if=*)",
+      "mcp__claude-in-chrome__*"
     ]
   },
   "env": {
     "LANG": "ja_JP.UTF-8",
     "BUN_INSTALL": "/c/Users/Owner/.bun"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bun x ccusage statusline"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo {\"decision\":\"block\",\"reason\":\"Edit禁止: sw/Python/PowerShellを使用\"}"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo {\"decision\":\"block\",\"reason\":\"Write禁止: sw/Python/PowerShellを使用\"}"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__codex__codex",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo {\"systemMessage\":\"【必須】threadId受信時は codex-fetch <threadId> をUTF-8で実行して本文を取得すること\"}"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo {\"systemMessage\":\"【Tier 0】claude-delegator: Architect/Plan Reviewer/Code Reviewer/Security Analyst | threadId受信後は codex-fetch で結果取得(UTF-8) | 日本語OK\"}"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo {\"systemMessage\":\"claude-delegator 使用確認: 設計・計画・レビュー・セキュリティは委任したか？\"}"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo {\"systemMessage\":\"【Tier 0 必須】claude-delegator: 設計→Architect, 計画→Plan Reviewer, コード→Code Reviewer | threadId受信→codex-fetch(UTF-8)で取得 | 日本語対応\"}"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo {\"systemMessage\":\"コンテキスト圧縮! 【絶対忘れない】claude-delegator + codex-fetch(UTF-8) | 日本語OK\"}"
+          }
+        ]
+      },
+      {
+        "matcher": "context",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo {\"systemMessage\":\"【Tier 0】claude-delegator継続: threadId→codex-fetch(UTF-8)で本文取得 | 日本語対応\"}"
+          }
+        ]
+      }
+    ]
   }
 }

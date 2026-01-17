@@ -1,5 +1,5 @@
 ---
-paths: "**/next.config.*, **/app/**, **/pages/**, **/hono.*, **/wrangler.toml"
+paths: "**/next.config.*, **/app/**, **/pages/**"
 ---
 
 # Next.js / Hono 開発ルール

@@ -34,14 +34,3 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
-
-# Python
-venv/
-__pycache__/
-*.pyc
-*.pyo
-.Python
-
-# Cloudflare
-.wrangler/
-.dev.vars

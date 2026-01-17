@@ -1,5 +1,5 @@
 ---
-paths: "**/*.cpp, **/*.hpp, **/*.h, **/CMakeLists.txt"
+paths: "**/*.cpp, **/*.hpp, **/*.c, **/*.h"
 ---
 
 # C++開発ルール

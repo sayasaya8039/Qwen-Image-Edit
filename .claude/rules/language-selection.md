@@ -2,6 +2,10 @@
 paths: "**/*"
 ---
 
+---
+paths: "**/*"
+---
+
 # プロジェクト言語選択ガイド
 
 ## 概要
@@ -13,8 +17,8 @@ paths: "**/*"
 | プロジェクト種類 | 言語 | フレームワーク |
 |------------------|------|----------------|
 | Chrome拡張機能 | TypeScript | React + Vite |
-| Webアプリ（SPA） | TypeScript | React + Vite |
-| Webアプリ（SSR） | TypeScript | Next.js |
+| Webアプリ（SPA） | TypeScript | React/Svelte + Vite |
+| Webアプリ（SSR） | TypeScript | Next.js/SvelteKit |
 | **Windowsアプリ** | **Electron/Tauri/Python** | **下記参照** |
 | CLIツール | Rust/Python | clap/argparse |
 | AI/ML連携 | Python | PyQt + PyTorch |

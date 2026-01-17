@@ -1,5 +1,5 @@
 ---
-paths: "**/manifest.json, **/background/**, **/popup/**, **/content/**, **/options/**"
+paths: "**/manifest.json, **/background/**, **/popup/**, **/content/**"
 ---
 
 # Chrome拡張機能開発ルール

@@ -1,3 +1,3 @@
-export { AdminLogin } from './AdminLogin'
-export { AdminDashboard } from './AdminDashboard'
-export { LocalSetup } from './LocalSetup'
+export { AdminDashboard } from "./AdminDashboard";
+export { AdminLogin } from "./AdminLogin";
+export { LocalSetup } from "./LocalSetup";

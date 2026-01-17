@@ -2,6 +2,10 @@
 paths: "**/*.tsx, **/*.jsx, **/components/**"
 ---
 
+---
+paths: "**/*.tsx, **/*.jsx, **/components/**"
+---
+
 # React開発ルール
 
 ## コンポーネント設計

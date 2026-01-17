@@ -1,0 +1,186 @@
+@import "tailwindcss";
+
+:root {
+  /* PhotoShop風ダークテーマ */
+  --ps-bg-dark: #1e1e1e;
+  --ps-bg-medium: #2d2d2d;
+  --ps-bg-light: #3c3c3c;
+  --ps-bg-lighter: #535353;
+  --ps-border: #484848;
+  --ps-text: #cccccc;
+  --ps-text-muted: #8c8c8c;
+  --ps-accent: #0078d4;
+  --ps-accent-hover: #1a8cff;
+  --ps-success: #4caf50;
+  --ps-warning: #ff9800;
+  --ps-error: #f44336;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', 'Meiryo UI', sans-serif;
+  background-color: var(--ps-bg-dark);
+  color: var(--ps-text);
+  overflow: hidden;
+}
+
+/* スクロールバーのスタイル */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ps-bg-medium);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ps-bg-lighter);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* ドロップゾーン */
+.dropzone {
+  border: 2px dashed var(--ps-border);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.dropzone:hover,
+.dropzone.active {
+  border-color: var(--ps-accent);
+  background-color: rgba(0, 120, 212, 0.1);
+}
+
+/* ボタンスタイル */
+.btn-primary {
+  background-color: var(--ps-accent);
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--ps-accent-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: var(--ps-bg-light);
+  color: var(--ps-text);
+  padding: 8px 16px;
+  border: 1px solid var(--ps-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: var(--ps-bg-lighter);
+}
+
+/* パネルスタイル */
+.panel {
+  background-color: var(--ps-bg-medium);
+  border: 1px solid var(--ps-border);
+}
+
+.panel-header {
+  background-color: var(--ps-bg-light);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--ps-border);
+}
+
+/* 入力フィールド */
+.input-field {
+  background-color: var(--ps-bg-dark);
+  border: 1px solid var(--ps-border);
+  color: var(--ps-text);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 100%;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--ps-accent);
+}
+
+/* ローディングスピナー */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--ps-bg-lighter);
+  border-top-color: var(--ps-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* プログレスバー */
+.progress-bar {
+  height: 4px;
+  background-color: var(--ps-bg-light);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: var(--ps-accent);
+  transition: width 0.3s ease;
+}
+
+/* ツールチップ */
+.tooltip {
+  position: relative;
+}
+
+.tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background-color: #000;
+  color: white;
+  font-size: 11px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.tooltip:hover::after {
+  opacity: 1;
+}

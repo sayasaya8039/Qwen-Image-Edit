@@ -1,4 +1,8 @@
 ---
+paths: "**/windows/**, **/*.exe"
+---
+
+---
 paths: "**/*.rs, **/*.cpp, **/*.py, **/Cargo.toml, **/CMakeLists.txt, **/electron/**"
 ---
 

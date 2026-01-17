@@ -1,4 +1,8 @@
 ---
+paths: "**/*.ts, **/*.tsx"
+---
+
+---
 paths: "src/**/*.ts, src/**/*.tsx"
 ---
 

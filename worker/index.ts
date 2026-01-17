@@ -32,6 +32,7 @@ const DEFAULT_HF_SPACE_URL = "https://qwen-qwen-image-edit-2511.hf.space";
 const BAGEL_SPACE_URL = "https://bytedance-seed-bagel.hf.space";
 const ZIMAGE_SPACE_URL = "https://tongyi-mai-z-image-turbo.hf.space";
 const FLUX2_SPACE_URL = "https://black-forest-labs-flux-2-dev.hf.space";
+const LTX2_SPACE_URL = "https://sayasaya11-ltx-2-video.hf.space";
 
 // 日本語を含むかチェック（ひらがな、カタカナ、漢字）
 function containsJapanese(text: string): boolean {
@@ -393,15 +394,34 @@ app.post("/api/generate", async (c) => {
 				},
 				503
 			);
-		} else if (activeModelId === "stable-diffusion-onnx-fp16" || activeModelId === "stable-diffusion-v1-5") {
-			// Stable Diffusion ONNX（ローカルサーバー必須）
+		} else if (activeModelId === "stable-diffusion-onnx-fp16") {
+			// Stable Diffusion ONNX FP16（ローカルサーバー必須）
 			return c.json(
 				{
 					error: true,
-					message: "Stable Diffusion ONNXはローカルサーバーでのみ利用可能です。ローカル環境で実行してください。",
+					message: "Stable Diffusion ONNX FP16はローカルサーバーでのみ利用可能です。stable-diffusion-v1-5（クラウド版）をお使いください。",
 				},
 				503
 			);
+		} else if (activeModelId === "stable-diffusion-v1-5") {
+			// Stable Diffusion 1.5（Replicate API）
+			if (!c.env.REPLICATE_API_TOKEN) {
+				return c.json(
+					{
+						error: true,
+						message: "Stable Diffusion 1.5にはReplicate APIトークンが必要です。",
+					},
+					503
+				);
+			}
+			result = await callReplicateStableDiffusion(
+				c.env.REPLICATE_API_TOKEN,
+				prompt,
+				negativePrompt,
+				width,
+				height,
+			);
+			usedBackend = "replicate";
 		} else if (activeModelId === "flux1-dev-onnx" || activeModelId === "flux1-schnell-onnx") {
 			// FLUX.1 ONNX（ローカルサーバー必須）
 			return c.json(
@@ -420,6 +440,27 @@ app.post("/api/generate", async (c) => {
 				},
 				503
 			);
+		} else if (activeModelId === "qwen-image-2512") {
+			// Qwen-Image-2512 Text-to-Image モデル（ZeroGPU Space認証必須）
+			result = await callQwenImage2512API(prompt, aspectRatio, c.env.HF_TOKEN);
+			usedBackend = "qwen-image-2512";
+		} else if (activeModelId === "sdxl-turbo") {
+			// SDXL Turbo 超高速画像生成（ZeroGPU Space認証必須）
+			result = await callSDXLTurboAPI(prompt, c.env.HF_TOKEN);
+			usedBackend = "sdxl-turbo";
+		} else if (activeModelId === "animagine-xl-31") {
+			// Animagine XL 3.1 高品質アニメ画像生成（ZeroGPU Space認証必須）
+			result = await callAnimagineXL31API(prompt, negativePrompt, c.env.HF_TOKEN);
+			usedBackend = "animagine-xl-31";
+		} else if (activeModelId === "ltx-2-video") {
+			// LTX-2 Video Generator（ZeroGPU Space）
+			const videoResult = await callLtx2CloudAPI(prompt, negativePrompt);
+			return c.json({
+				video: videoResult,
+				backend: "ltx2-cloud",
+				modelId: activeModelId,
+				type: "video",
+			});
 		} else {
 			// Qwen系またはその他のモデル
 			// バックエンドを確認
@@ -837,6 +878,394 @@ async function callReplicateStableDiffusion(
 	}
 
 	throw new Error("Stable Diffusion APIからの応答が不正です");
+}
+
+// SDXL Turbo 超高速画像生成API（ZeroGPU Space）
+async function callSDXLTurboAPI(
+	prompt: string,
+	hfToken?: string,
+): Promise<string> {
+	const hfUrl = "https://sayasaya11-sdxl-turbo.hf.space";
+	const maxRetries = 3;
+	let lastError: Error | null = null;
+
+	const headers: Record<string, string> = {
+		"Content-Type": "application/json",
+	};
+	if (hfToken) {
+		headers.Authorization = `Bearer ${hfToken}`;
+	}
+
+	for (let attempt = 1; attempt <= maxRetries; attempt++) {
+		try {
+			console.log(`SDXL Turbo attempt ${attempt}/${maxRetries}`);
+
+			// Gradio API: /gradio_api/call/generate
+			// inputs: [prompt, seed, randomize_seed, steps]
+			const callRes = await fetch(`${hfUrl}/gradio_api/call/generate`, {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					data: [
+						prompt,
+						0, // seed
+						true, // randomize_seed
+						1, // steps (1-4, 1 is fastest)
+					],
+				}),
+			});
+
+			if (!callRes.ok) {
+				const errorText = await callRes.text();
+				console.error("SDXL Turbo call error:", errorText);
+				throw new Error("SDXL Turbo Spaceへの接続に失敗しました");
+			}
+
+			const callData = (await callRes.json()) as { event_id: string };
+			const eventId = callData.event_id;
+
+			// SSE結果をポーリング
+			const resultRes = await fetch(`${hfUrl}/gradio_api/call/generate/${eventId}`, {
+				headers: hfToken ? { Authorization: `Bearer ${hfToken}` } : {},
+			});
+
+			if (!resultRes.ok) {
+				throw new Error("SDXL Turboの結果取得に失敗しました");
+			}
+
+			const text = await resultRes.text();
+			console.log("SDXL Turbo raw response:", text.substring(0, 500));
+
+			// エラーイベントのチェック
+			if (text.includes("event: error")) {
+				console.error(`SDXL Turbo Space returned error event (attempt ${attempt})`);
+				if (attempt < maxRetries) {
+					await new Promise((resolve) => setTimeout(resolve, 3000));
+					continue;
+				}
+				throw new Error(
+					"SDXL Turbo SpaceのZeroGPU割り当てが一時的に枯渇しています。しばらく待ってから再試行してください。",
+				);
+			}
+
+			const lines = text.split("\n");
+
+			for (const line of lines) {
+				if (line.startsWith("data: ")) {
+					try {
+						const jsonStr = line.slice(6);
+						if (jsonStr === "null") continue;
+
+						const data = JSON.parse(jsonStr) as unknown[];
+						// 結果は [image_output, seed_output] の形式
+						if (Array.isArray(data) && data.length > 0) {
+							const imageOutput = data[0] as { url?: string; path?: string } | null;
+							if (imageOutput) {
+								let imageUrl = imageOutput.url || imageOutput.path;
+								if (imageUrl) {
+									// 相対URLを絶対URLに変換
+									if (imageUrl.startsWith("/")) {
+										imageUrl = `${hfUrl}${imageUrl}`;
+									}
+									// 画像をbase64に変換
+									console.log("Fetching SDXL Turbo image from:", imageUrl);
+									const imageRes = await fetch(imageUrl, {
+										headers: hfToken ? { Authorization: `Bearer ${hfToken}` } : {},
+									});
+									if (!imageRes.ok) {
+										throw new Error("SDXL Turbo画像の取得に失敗しました");
+									}
+									const imageBuffer = await imageRes.arrayBuffer();
+									const base64 = btoa(
+										String.fromCharCode(...new Uint8Array(imageBuffer)),
+									);
+									const mimeType = imageRes.headers.get("content-type") || "image/webp";
+									return `data:${mimeType};base64,${base64}`;
+								}
+							}
+						}
+					} catch {
+						continue;
+					}
+				}
+			}
+
+			throw new Error("SDXL Turboから画像データを取得できませんでした");
+		} catch (error) {
+			lastError = error instanceof Error ? error : new Error(String(error));
+			console.error(`SDXL Turbo attempt ${attempt} failed:`, lastError.message);
+			if (attempt < maxRetries) {
+				await new Promise((resolve) => setTimeout(resolve, 2000));
+			}
+		}
+	}
+
+	throw lastError || new Error("SDXL Turboでの画像生成に失敗しました");
+}
+
+// Animagine XL 3.1 アニメ画像生成API呼び出し（リトライ付き）
+// ZeroGPU SpaceはHuggingFace認証が必要
+async function callAnimagineXL31API(
+	prompt: string,
+	negativePrompt: string = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, jpeg artifacts, signature, watermark, blurry",
+	hfToken?: string,
+): Promise<string> {
+	const hfUrl = "https://sayasaya11-animagine-xl-31.hf.space";
+	const maxRetries = 3;
+	let lastError: Error | null = null;
+
+	const headers: Record<string, string> = {
+		"Content-Type": "application/json",
+	};
+	if (hfToken) {
+		headers.Authorization = `Bearer ${hfToken}`;
+	}
+
+	for (let attempt = 1; attempt <= maxRetries; attempt++) {
+		try {
+			console.log(`Animagine XL 3.1 attempt ${attempt}/${maxRetries}`);
+
+			// Gradio API: /gradio_api/call/generate
+			// inputs: [prompt, negative_prompt, seed, randomize_seed, width, height, guidance_scale, num_inference_steps]
+			const callRes = await fetch(`${hfUrl}/gradio_api/call/generate`, {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					data: [
+						prompt,
+						negativePrompt,
+						0, // seed
+						true, // randomize_seed
+						1024, // width
+						1024, // height
+						7.0, // guidance_scale
+						28, // num_inference_steps
+					],
+				}),
+			});
+
+			if (!callRes.ok) {
+				const errorText = await callRes.text();
+				console.error("Animagine XL 3.1 call error:", errorText);
+				throw new Error("Animagine XL 3.1 Spaceへの接続に失敗しました");
+			}
+
+			const callData = (await callRes.json()) as { event_id: string };
+			const eventId = callData.event_id;
+
+			// SSE結果をポーリング
+			const resultRes = await fetch(`${hfUrl}/gradio_api/call/generate/${eventId}`, {
+				headers: hfToken ? { Authorization: `Bearer ${hfToken}` } : {},
+			});
+
+			if (!resultRes.ok) {
+				throw new Error("Animagine XL 3.1の結果取得に失敗しました");
+			}
+
+			const text = await resultRes.text();
+			console.log("Animagine XL 3.1 raw response:", text.substring(0, 500));
+
+			// エラーイベントのチェック
+			if (text.includes("event: error")) {
+				console.error(`Animagine XL 3.1 Space returned error event (attempt ${attempt})`);
+				if (attempt < maxRetries) {
+					await new Promise((resolve) => setTimeout(resolve, 3000));
+					continue;
+				}
+				throw new Error(
+					"Animagine XL 3.1 SpaceのZeroGPU割り当てが一時的に枯渇しています。しばらく待ってから再試行してください。",
+				);
+			}
+
+			const lines = text.split("\n");
+
+			for (const line of lines) {
+				if (line.startsWith("data: ")) {
+					try {
+						const jsonStr = line.slice(6);
+						if (jsonStr === "null") continue;
+
+						const data = JSON.parse(jsonStr) as unknown[];
+						// 結果は [image_output, seed_output] の形式
+						if (Array.isArray(data) && data.length > 0) {
+							const imageOutput = data[0] as { url?: string; path?: string } | null;
+							if (imageOutput) {
+								let imageUrl = imageOutput.url || imageOutput.path;
+								if (imageUrl) {
+									// 相対パスの場合はフルURLに変換
+									if (imageUrl.startsWith("/")) {
+										imageUrl = `${hfUrl}${imageUrl}`;
+									}
+
+									// 画像をフェッチしてBase64に変換
+									console.log("Fetching Animagine XL 3.1 image from:", imageUrl);
+									const imageRes = await fetch(imageUrl, {
+										headers: hfToken ? { Authorization: `Bearer ${hfToken}` } : {},
+									});
+									if (!imageRes.ok) {
+										throw new Error("Animagine XL 3.1画像の取得に失敗しました");
+									}
+									const imageBuffer = await imageRes.arrayBuffer();
+									const base64 = btoa(
+										new Uint8Array(imageBuffer).reduce(
+											(data, byte) => data + String.fromCharCode(byte),
+											"",
+										),
+									);
+									return `data:image/png;base64,${base64}`;
+								}
+							}
+						}
+					} catch {
+						continue;
+					}
+				}
+			}
+
+			throw new Error("Animagine XL 3.1から画像データを取得できませんでした");
+		} catch (e) {
+			lastError = e as Error;
+			console.error(`Animagine XL 3.1 attempt ${attempt} failed:`, lastError.message);
+			if (attempt < maxRetries) {
+				await new Promise((resolve) => setTimeout(resolve, 2000));
+			}
+		}
+	}
+
+	throw lastError || new Error("Animagine XL 3.1での画像生成に失敗しました");
+}
+
+// Qwen-Image-2512 Text-to-Image API呼び出し（リトライ付き）
+// ZeroGPU SpaceはHuggingFace認証が必要
+async function callQwenImage2512API(
+	prompt: string,
+	aspectRatio: string = "16:9",
+	hfToken?: string,
+): Promise<string> {
+	const hfUrl = "https://sayasaya11-qwen-image-2512.hf.space";
+	const maxRetries = 3;
+	let lastError: Error | null = null;
+
+	// 認証ヘッダー（ZeroGPU Spaceは認証必須）
+	const headers: Record<string, string> = {
+		"Content-Type": "application/json",
+	};
+	if (hfToken) {
+		headers.Authorization = `Bearer ${hfToken}`;
+	}
+
+	for (let attempt = 1; attempt <= maxRetries; attempt++) {
+		try {
+			console.log(`Qwen-Image-2512 attempt ${attempt}/${maxRetries}`);
+
+			// Gradio 6.x API: /gradio_api/call/infer
+			// inputs: [prompt, seed, randomize_seed, aspect_ratio, guidance_scale, num_inference_steps, prompt_enhance]
+			const callRes = await fetch(`${hfUrl}/gradio_api/call/infer`, {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					data: [
+						prompt,
+						0, // seed
+						true, // randomize_seed
+						aspectRatio, // aspect_ratio ("16:9", "1:1", "9:16", etc.)
+						4.0, // guidance_scale
+						50, // num_inference_steps
+						false, // prompt_enhance (disabled - no DASH_API_KEY)
+					],
+				}),
+			});
+
+			if (!callRes.ok) {
+				const errorText = await callRes.text();
+				console.error("Qwen-Image-2512 call error:", errorText);
+				throw new Error("Qwen-Image-2512 Spaceへの接続に失敗しました");
+			}
+
+			const callData = (await callRes.json()) as { event_id: string };
+			const eventId = callData.event_id;
+
+			// SSE結果をポーリング（タイムアウト付き）
+			const resultRes = await fetch(`${hfUrl}/gradio_api/call/infer/${eventId}`, {
+				headers: hfToken ? { Authorization: `Bearer ${hfToken}` } : {},
+			});
+
+			if (!resultRes.ok) {
+				throw new Error("Qwen-Image-2512の結果取得に失敗しました");
+			}
+
+			const text = await resultRes.text();
+			console.log("Qwen-Image-2512 raw response:", text.substring(0, 500));
+
+			// エラーイベントのチェック
+			if (text.includes("event: error")) {
+				console.error(
+					`Qwen-Image-2512 Space returned error event (attempt ${attempt})`,
+				);
+				if (attempt < maxRetries) {
+					// リトライ前に少し待機（ZeroGPU割り当て待ち）
+					await new Promise((resolve) => setTimeout(resolve, 3000));
+					continue;
+				}
+				throw new Error(
+					"Qwen-Image-2512 SpaceのZeroGPU割り当てが一時的に枯渇しています。しばらく待ってから再試行するか、他のモデルをお試しください。",
+				);
+			}
+
+			const lines = text.split("\n");
+
+			for (const line of lines) {
+				if (line.startsWith("data: ")) {
+					try {
+						const jsonStr = line.slice(6);
+						if (jsonStr === "null") {
+							continue;
+						}
+
+						const data = JSON.parse(jsonStr) as unknown[];
+						// 結果は [image_output, seed_output] の形式
+						if (Array.isArray(data) && data.length > 0) {
+							const imageOutput = data[0] as {
+								url?: string;
+								path?: string;
+							} | null;
+							if (imageOutput) {
+								let imageUrl = imageOutput.url || imageOutput.path;
+								if (imageUrl) {
+									// 相対URLを絶対URLに変換
+									if (imageUrl.startsWith("/")) {
+										imageUrl = `${hfUrl}${imageUrl}`;
+									}
+
+									// 画像をfetchしてbase64に変換
+									const imageRes = await fetch(imageUrl);
+									if (!imageRes.ok) {
+										throw new Error("生成された画像の取得に失敗しました");
+									}
+									const imageBuffer = await imageRes.arrayBuffer();
+									const base64 = arrayBufferToBase64(imageBuffer);
+									return `data:image/png;base64,${base64}`;
+								}
+							}
+						}
+					} catch (e) {
+						console.error("Failed to parse Qwen-Image-2512 data line:", e);
+					}
+				}
+			}
+
+			// データが見つからなかった場合
+			throw new Error("Qwen-Image-2512からの画像データが見つかりませんでした");
+		} catch (e) {
+			lastError = e as Error;
+			console.error(`Qwen-Image-2512 attempt ${attempt} failed:`, e);
+			if (attempt < maxRetries) {
+				await new Promise((resolve) => setTimeout(resolve, 3000));
+			}
+		}
+	}
+
+	throw lastError || new Error("Qwen-Image-2512からの画像生成に失敗しました");
 }
 
 // Gradio API呼び出し (HuggingFace Space) - Gradio 6.x対応
@@ -1504,6 +1933,73 @@ async function callFlux2API(
 	}
 
 	throw new Error("FLUX.2画像の生成に失敗しました");
+}
+
+// LTX-2 Video Generator API呼び出し
+async function callLtx2CloudAPI(prompt: string, negativePrompt: string): Promise<string> {
+	console.log("Calling LTX-2 Video Generator API...");
+
+	// Gradio API呼び出し
+	const queueRes = await fetch(`${LTX2_SPACE_URL}/gradio_api/call/generate_video`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			data: [
+				prompt,           // prompt
+				negativePrompt || "worst quality, inconsistent motion, blurry, jittery, distorted", // negative_prompt
+				512,              // width
+				320,              // height
+				49,               // num_frames (2秒 @24fps)
+				30,               // num_inference_steps
+				4.0,              // guidance_scale
+				-1,               // seed (-1 = random)
+			],
+		}),
+	});
+
+	if (!queueRes.ok) {
+		const errorText = await queueRes.text();
+		console.error("LTX-2 queue error:", errorText);
+		throw new Error("LTX-2 APIへの接続に失敗しました");
+	}
+
+	const queueData = await queueRes.json() as { event_id: string };
+	const eventId = queueData.event_id;
+
+	// イベントストリームから結果を取得
+	const streamRes = await fetch(`${LTX2_SPACE_URL}/gradio_api/call/generate_video/${eventId}`);
+
+	if (!streamRes.ok) {
+		throw new Error("LTX-2結果の取得に失敗しました");
+	}
+
+	const text = await streamRes.text();
+	const lines = text.split("\n");
+
+	for (const line of lines) {
+		if (line.startsWith("data: ")) {
+			try {
+				const data = JSON.parse(line.slice(6));
+				// data[0] がビデオ、data[1] がステータス
+				if (Array.isArray(data) && data[0]) {
+					const videoData = data[0];
+					if (typeof videoData === "object" && videoData.url) {
+						// Gradio file response format
+						return videoData.url;
+					}
+					if (typeof videoData === "string") {
+						return videoData;
+					}
+				}
+			} catch {
+				// パース失敗、次の行を試す
+			}
+		}
+	}
+
+	throw new Error("LTX-2からビデオを取得できませんでした");
 }
 
 // ============================

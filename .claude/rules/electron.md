@@ -1,5 +1,5 @@
 ---
-paths: "**/electron/**, **/main.ts, **/preload.ts, **/forge.config.*"
+paths: "**/electron/**, **/main.js, **/preload.js"
 ---
 
 # Electron 開発ルール
