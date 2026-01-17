@@ -32,6 +32,7 @@ const DEFAULT_HF_SPACE_URL = "https://qwen-qwen-image-edit-2511.hf.space";
 const BAGEL_SPACE_URL = "https://bytedance-seed-bagel.hf.space";
 const ZIMAGE_SPACE_URL = "https://tongyi-mai-z-image-turbo.hf.space";
 const FLUX2_SPACE_URL = "https://black-forest-labs-flux-2-dev.hf.space";
+const FLUX2_KLEIN_SPACE_URL = "https://sayasaya11-flux2-klein-4b-fp8-zerogpu.hf.space";
 const LTX2_SPACE_URL = "https://sayasaya11-ltx-2-video.hf.space";
 
 // 日本語を含むかチェック（ひらがな、カタカナ、漢字）
@@ -381,6 +382,10 @@ app.post("/api/generate", async (c) => {
 			// FLUX.2 [dev] モデルを使用
 			result = await callFlux2API(prompt, image1);
 			usedBackend = "flux2";
+		} else if (activeModelId === "flux2-klein-4b-fp8") {
+			// FLUX.2 Klein 4B (FP8) モデルを使用
+			result = await callFlux2KleinAPI(prompt, negativePrompt, width, height);
+			usedBackend = "flux2-klein";
 		} else if (activeModelId === "real-esrgan-ncnn" || activeModelId === "real-esrgan") {
 			// Real-ESRGAN 超解像度（ローカルサーバー必須）
 			if (!image1) {
@@ -1933,6 +1938,100 @@ async function callFlux2API(
 	}
 
 	throw new Error("FLUX.2画像の生成に失敗しました");
+}
+
+// FLUX.2 Klein 4B (FP8) API呼び出し
+async function callFlux2KleinAPI(
+	prompt: string,
+	negativePrompt: string,
+	width: number,
+	height: number,
+): Promise<string> {
+	console.log("Calling FLUX.2 Klein 4B API...");
+
+	// Gradio API呼び出し
+	const queueRes = await fetch(`${FLUX2_KLEIN_SPACE_URL}/gradio_api/call/generate_image`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			data: [
+				prompt, // prompt
+				negativePrompt || "", // negative_prompt
+				width, // width
+				height, // height
+				20, // num_inference_steps
+				3.5, // guidance_scale
+				-1, // seed (random)
+			],
+		}),
+	});
+
+	if (!queueRes.ok) {
+		const errorText = await queueRes.text();
+		console.error("FLUX.2 Klein queue error:", errorText);
+		throw new Error("FLUX.2 Klein APIへの接続に失敗しました");
+	}
+
+	const queueData = (await queueRes.json()) as { event_id: string };
+	const eventId = queueData.event_id;
+
+	// イベントストリームから結果を取得
+	const streamRes = await fetch(
+		`${FLUX2_KLEIN_SPACE_URL}/gradio_api/call/generate_image/${eventId}`,
+	);
+
+	if (!streamRes.ok) {
+		throw new Error("FLUX.2 Klein結果の取得に失敗しました");
+	}
+
+	const text = await streamRes.text();
+	console.log("FLUX.2 Klein raw response:", text.substring(0, 500));
+
+	// エラーイベントのチェック
+	if (text.includes("event: error")) {
+		console.error(
+			"FLUX.2 Klein Space returned error event - likely ZeroGPU quota exceeded",
+		);
+		throw new Error(
+			"FLUX.2 Klein SpaceのZeroGPU割り当てが一時的に枯渇しています。しばらく待ってから再試行してください。",
+		);
+	}
+
+	const lines = text.split("\n");
+
+	for (const line of lines) {
+		if (line.startsWith("data: ")) {
+			try {
+				const jsonStr = line.slice(6);
+				if (jsonStr === "null") {
+					console.log("FLUX.2 Klein: data is null, skipping");
+					continue;
+				}
+
+				const data = JSON.parse(jsonStr) as unknown[];
+				console.log("FLUX.2 Klein parsed data:", JSON.stringify(data).substring(0, 300));
+
+				// 結果は単一の画像 URL
+				if (typeof data[0] === "string" && data[0].startsWith("http")) {
+					console.log("FLUX.2 Klein: Found image URL");
+					return data[0];
+				}
+
+				// または { url: string } 形式
+				if (data[0] && typeof data[0] === "object" && "url" in data[0]) {
+					const imageUrl = (data[0] as { url: string }).url;
+					console.log("FLUX.2 Klein: Found image in object");
+					return imageUrl;
+				}
+			} catch (e) {
+				// パースエラーは無視
+			}
+		}
+	}
+
+	throw new Error("FLUX.2 Klein画像の生成に失敗しました");
 }
 
 // LTX-2 Video Generator API呼び出し
