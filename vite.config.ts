@@ -14,5 +14,6 @@ export default defineConfig({
 	},
 	optimizeDeps: {
 		exclude: ["@assemblyscript/loader"]
-	}
+	},
+	assetsInclude: ['**/*.wgsl']
 });

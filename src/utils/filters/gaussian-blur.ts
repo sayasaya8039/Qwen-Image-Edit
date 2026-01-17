@@ -1,205 +1,111 @@
-/**
- * ガウシアンブラーフィルター
- * WebGPU compute shaderを使用した高速ガウシアンブラー実装
- */
+import { applyWebGPUGaussianBlur, type WebGPUBlurOptions } from './webgpu-blur';
 
 export interface GaussianBlurOptions {
   radius: number;
   sigma?: number;
+  forceGPU?: boolean;
+}
+
+// CPU fallback implementation
+function applyCPUGaussianBlur(
+  imageData: ImageData,
+  options: GaussianBlurOptions
+): ImageData {
+  const { width, height, data } = imageData;
+  const { radius, sigma = radius / 3 } = options;
+
+  const kernelSize = radius * 2 + 1;
+  const kernel = new Float32Array(kernelSize);
+  let sum = 0;
+
+  for (let i = 0; i &lt; kernelSize; i++) {
+    const x = i - radius;
+    kernel[i] = Math.exp(-(x * x) / (2 * sigma * sigma));
+    sum += kernel[i];
+  }
+
+  for (let i = 0; i &lt; kernelSize; i++) {
+    kernel[i] /= sum;
+  }
+
+  const temp = new Uint8ClampedArray(data.length);
+  const output = new Uint8ClampedArray(data.length);
+
+  for (let y = 0; y &lt; height; y++) {
+    for (let x = 0; x &lt; width; x++) {
+      let r = 0, g = 0, b = 0, a = 0;
+
+      for (let ky = -radius; ky &lt;= radius; ky++) {
+        const sy = Math.max(0, Math.min(height - 1, y + ky));
+        const idx = (sy * width + x) * 4;
+        const weight = kernel[ky + radius];
+
+        r += data[idx + 0] * weight;
+        g += data[idx + 1] * weight;
+        b += data[idx + 2] * weight;
+        a += data[idx + 3] * weight;
+      }
+
+      const outIdx = (y * width + x) * 4;
+      temp[outIdx + 0] = r;
+      temp[outIdx + 1] = g;
+      temp[outIdx + 2] = b;
+      temp[outIdx + 3] = a;
+    }
+  }
+
+  for (let y = 0; y &lt; height; y++) {
+    for (let x = 0; x &lt; width; x++) {
+      let r = 0, g = 0, b = 0, a = 0;
+
+      for (let kx = -radius; kx &lt;= radius; kx++) {
+        const sx = Math.max(0, Math.min(width - 1, x + kx));
+        const idx = (y * width + sx) * 4;
+        const weight = kernel[kx + radius];
+
+        r += temp[idx + 0] * weight;
+        g += temp[idx + 1] * weight;
+        b += temp[idx + 2] * weight;
+        a += temp[idx + 3] * weight;
+      }
+
+      const outIdx = (y * width + x) * 4;
+      output[outIdx + 0] = Math.round(r);
+      output[outIdx + 1] = Math.round(g);
+      output[outIdx + 2] = Math.round(b);
+      output[outIdx + 3] = Math.round(a);
+    }
+  }
+
+  return new ImageData(output, width, height);
+}
+
+export async function applyGaussianBlur(
+  imageData: ImageData,
+  options: GaussianBlurOptions
+): Promise&lt;ImageData> {
+  const useGPU = navigator.gpu &amp;&amp; !options.forceGPU === false;
+
+  if (useGPU) {
+    try {
+      const webgpuOptions: WebGPUBlurOptions = {
+        radius: options.radius,
+        sigma: options.sigma,
+      };
+      return await applyWebGPUGaussianBlur(imageData, webgpuOptions);
+    } catch (error) {
+      console.warn('WebGPU blur failed, falling back to CPU:', error);
+    }
+  }
+
+  return applyCPUGaussianBlur(imageData, options);
 }
 
 export class GaussianBlurFilter {
-  private device: GPUDevice | null = null;
-  private pipeline: GPUComputePipeline | null = null;
-  private initialized = false;
-
-  async initialize() {
-    if (this.initialized) return;
-    
-    if (!navigator.gpu) {
-      throw new Error('WebGPU not supported');
-    }
-
-    const adapter = await navigator.gpu.requestAdapter();
-    if (!adapter) {
-      throw new Error('No GPU adapter found');
-    }
-
-    this.device = await adapter.requestDevice();
-    this.initialized = true;
-  }
-
   async apply(
     imageData: ImageData,
     options: GaussianBlurOptions
-  ): Promise<ImageData> {
-    await this.initialize();
-    if (!this.device) throw new Error('Device not initialized');
-
-    const { radius, sigma = radius / 3 } = options;
-    
-    const kernelSize = radius * 2 + 1;
-    const kernel = this.generateGaussianKernel(kernelSize, sigma);
-
-    const tempData = await this.applyPass(imageData, kernel, true);
-    const result = await this.applyPass(tempData, kernel, false);
-
-    return result;
-  }
-
-  private generateGaussianKernel(size: number, sigma: number): Float32Array {
-    const kernel = new Float32Array(size);
-    const center = Math.floor(size / 2);
-    let sum = 0;
-
-    for (let i = 0; i < size; i++) {
-      const x = i - center;
-      kernel[i] = Math.exp(-(x * x) / (2 * sigma * sigma));
-      sum += kernel[i];
-    }
-
-    for (let i = 0; i < size; i++) {
-      kernel[i] /= sum;
-    }
-
-    return kernel;
-  }
-
-  private async applyPass(
-    imageData: ImageData,
-    kernel: Float32Array,
-    horizontal: boolean
-  ): Promise<ImageData> {
-    if (!this.device) throw new Error('Device not initialized');
-
-    const { width, height, data } = imageData;
-
-    const inputBuffer = this.device.createBuffer({
-      size: data.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-      mappedAtCreation: true
-    });
-    new Uint8Array(inputBuffer.getMappedRange()).set(data);
-    inputBuffer.unmap();
-
-    const outputBuffer = this.device.createBuffer({
-      size: data.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
-    });
-
-    const kernelBuffer = this.device.createBuffer({
-      size: kernel.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-      mappedAtCreation: true
-    });
-    new Float32Array(kernelBuffer.getMappedRange()).set(kernel);
-    kernelBuffer.unmap();
-
-    const shaderModule = this.device.createShaderModule({
-      code: this.getShaderCode(horizontal, kernel.length)
-    });
-
-    const pipeline = this.device.createComputePipeline({
-      layout: 'auto',
-      compute: {
-        module: shaderModule,
-        entryPoint: 'main'
-      }
-    });
-
-    const bindGroup = this.device.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: inputBuffer } },
-        { binding: 1, resource: { buffer: outputBuffer } },
-        { binding: 2, resource: { buffer: kernelBuffer } }
-      ]
-    });
-
-    const commandEncoder = this.device.createCommandEncoder();
-    const passEncoder = commandEncoder.beginComputePass();
-    passEncoder.setPipeline(pipeline);
-    passEncoder.setBindGroup(0, bindGroup);
-    passEncoder.dispatchWorkgroups(
-      Math.ceil(width / 8),
-      Math.ceil(height / 8)
-    );
-    passEncoder.end();
-
-    const readBuffer = this.device.createBuffer({
-      size: data.byteLength,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-    });
-
-    commandEncoder.copyBufferToBuffer(
-      outputBuffer,
-      0,
-      readBuffer,
-      0,
-      data.byteLength
-    );
-
-    this.device.queue.submit([commandEncoder.finish()]);
-
-    await readBuffer.mapAsync(GPUMapMode.READ);
-    const resultData = new Uint8ClampedArray(
-      readBuffer.getMappedRange()
-    ).slice();
-    readBuffer.unmap();
-
-    inputBuffer.destroy();
-    outputBuffer.destroy();
-    kernelBuffer.destroy();
-    readBuffer.destroy();
-
-    return new ImageData(resultData, width, height);
-  }
-
-  private getShaderCode(horizontal: boolean, kernelSize: number): string {
-    const direction = horizontal ? 'vec2<i32>(x, 0)' : 'vec2<i32>(0, y)';
-    const kernelRadius = Math.floor(kernelSize / 2);
-    
-    return `
-      @group(0) @binding(0) var<storage, read> input: array<vec4<f32>>;
-      @group(0) @binding(1) var<storage, read_write> output: array<vec4<f32>>;
-      @group(0) @binding(2) var<storage, read> kernel: array<f32>;
-
-      @compute @workgroup_size(8, 8)
-      fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-        let width = 1024u;
-        let height = 1024u;
-        let idx = id.y * width + id.x;
-
-        if (id.x >= width || id.y >= height) {
-          return;
-        }
-
-        var sum = vec4<f32>(0.0);
-        let kernelRadius = ${kernelRadius};
-
-        for (var i = -kernelRadius; i <= kernelRadius; i = i + 1) {
-          let offset = ${direction.replace('x', 'i').replace('y', 'i')};
-          let sampleIdx = clamp(
-            i32(id.y) + offset.y,
-            0,
-            i32(height) - 1
-          ) * i32(width) + clamp(
-            i32(id.x) + offset.x,
-            0,
-            i32(width) - 1
-          );
-          
-          sum = sum + input[sampleIdx] * kernel[i + kernelRadius];
-        }
-
-        output[idx] = sum;
-      }
-    `;
-  }
-
-  destroy() {
-    this.device = null;
-    this.pipeline = null;
-    this.initialized = false;
+  ): Promise&lt;ImageData> {
+    return applyGaussianBlur(imageData, options);
   }
 }
