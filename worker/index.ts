@@ -2284,6 +2284,7 @@ app.put("/api/admin/settings", authMiddleware, async (c) => {
 // 静的ファイル配信
 app.get("/assets/*", serveStatic({ manifest }));
 app.get("/downloads/*", serveStatic({ manifest }));
+app.get("/wasm/*", serveStatic({ manifest }));
 
 // SPAフォールバック
 app.get("*", serveStatic({ path: "./index.html", manifest }));

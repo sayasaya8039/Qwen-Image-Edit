@@ -1,143 +1,88 @@
-// Transformers.js WebGPUバックエンド実装
-import { pipeline, env } from '@xenova/transformers';
-import type { BackendExecutor, BackendCapabilities, BackendType, GenerationParams, MemoryInfo } from './types';
+import { env } from '@xenova/transformers';
+import type { BackendExecutor, BackendType, BackendCapabilities, GenerationParams, MemoryInfo } from './types';
 
+/**
+ * Transformers.js + WebGPU Backend (GPU)
+ * 
+ * 注意: text-to-imageタスクは現在Transformers.jsで未サポート
+ * 参考: https://github.com/xenova/transformers.js/issues/908
+ */
 export class TransformersWebGPUBackend implements BackendExecutor {
-  readonly name = 'Transformers.js (WebGPU)';
   readonly type: BackendType = 'transformers-webgpu' as BackendType;
-  
-  private generator: any = null;
-  private initialized = false;
+
+  private _gpu: GPU | null = null;
   private gpuAdapter: GPUAdapter | null = null;
+  private gpuDevice: GPUDevice | null = null;
 
   async init(): Promise<void> {
-    if (this.initialized) return;
-
-    try {
-      // WebGPU対応確認
-      if (!('gpu' in navigator)) {
-        throw new Error('WebGPU is not supported');
-      }
-
-      // GPUアダプター取得
-      this.gpuAdapter = await navigator.gpu.requestAdapter();
-      if (!this.gpuAdapter) {
-        throw new Error('Failed to get GPU adapter');
-      }
-
-      console.log('[TransformersWebGPU] GPU Adapter:', {
-        vendor: this.gpuAdapter.info?.vendor,
-        architecture: this.gpuAdapter.info?.architecture,
-      });
-
-      // WebGPU backendを設定
-      env.backends.onnx.wasm.proxy = false;
-      env.backends.onnx.webgpu.device = 'gpu';
-      
-      console.log('[TransformersWebGPU] Initializing WebGPU backend...');
-      
-      // モデルロード
-      this.generator = await pipeline(
-        'text-to-image',
-        'Xenova/sd-turbo',
-        { 
-          device: 'webgpu',
-          dtype: 'fp16', // WebGPUではfp16が高速
-        }
-      );
-      
-      this.initialized = true;
-      console.log('[TransformersWebGPU] Initialized successfully');
-    } catch (error) {
-      console.error('[TransformersWebGPU] Initialization failed:', error);
-      throw error;
+    console.log('[TransformersWebGPU] Initializing...');
+    
+    // WebGPU対応チェック
+    if (!('gpu' in navigator)) {
+      throw new Error('WebGPU not supported');
     }
+
+    this._gpu = navigator.gpu as GPU;
+
+    // WebGPUアダプターとデバイスを取得
+    this.gpuAdapter = await this._gpu.requestAdapter({ powerPreference: 'high-performance' });
+    if (!this.gpuAdapter) {
+      throw new Error('Failed to get WebGPU adapter');
+    }
+
+    console.log('[TransformersWebGPU] GPU Adapter:', { 
+      vendor: this.gpuAdapter.info?.vendor,
+      architecture: this.gpuAdapter.info?.architecture
+    });
+
+    this.gpuDevice = await this.gpuAdapter.requestDevice();
+    console.log('[TransformersWebGPU] GPU device acquired');
+
+    // 注意: text-to-imageパイプラインは未サポート
+    // 将来的に実装される予定
+    console.warn('[TransformersWebGPU] text-to-image pipeline not yet supported by Transformers.js');
+    
+    console.log('[TransformersWebGPU] Initialization complete (text-to-image not available)');
   }
 
   async isAvailable(): Promise<boolean> {
-    return 'gpu' in navigator;
+    try {
+      if (!('gpu' in navigator)) {
+        return false;
+      }
+
+      const adapter = await (navigator.gpu as GPU).requestAdapter();
+      // text-to-imageサポートがないため、現時点では利用不可とする
+      return false; // 将来的にサポートされたらtrueに変更
+    } catch {
+      return false;
+    }
   }
 
   getCapabilities(): BackendCapabilities {
     return {
-      supportsImageGeneration: true,
+      supportsImageGeneration: false, // text-to-image未サポート
       supportsImageProcessing: false,
       supportsOffline: true,
-      maxModelSize: 2000, // MB (VRAM)
+      maxModelSize: 2000,
       estimatedSpeed: 'fast',
     };
   }
 
-  async generateImage(params: GenerationParams): Promise<Blob> {
-    if (!this.initialized || !this.generator) {
-      await this.init();
-    }
-
-    console.log('[TransformersWebGPU] Generating image with params:', params);
-
-    try {
-      const output = await this.generator(params.prompt, {
-        negative_prompt: params.negativePrompt,
-        num_inference_steps: params.steps || 4,
-        guidance_scale: params.guidanceScale || 0.0,
-        width: params.width || 512,
-        height: params.height || 512,
-      });
-
-      return this.convertToBlob(output);
-    } catch (error) {
-      console.error('[TransformersWebGPU] Generation failed:', error);
-      throw error;
-    }
-  }
-
-  private async convertToBlob(output: any): Promise<Blob> {
-    if (output instanceof Blob) {
-      return output;
-    }
-    
-    if (output?.toBlob) {
-      return await output.toBlob();
-    }
-    
-    if (output?.toCanvas) {
-      const canvas = await output.toCanvas();
-      return new Promise((resolve) => {
-        canvas.toBlob((blob: Blob | null) => {
-          if (blob) resolve(blob);
-          else throw new Error('Failed to convert to Blob');
-        });
-      });
-    }
-
-    throw new Error('Unsupported output format');
-  }
-
-  async dispose(): Promise<void> {
-    if (this.generator) {
-      // @ts-ignore
-      await this.generator.dispose?.();
-      this.generator = null;
-    }
-    this.gpuAdapter = null;
-    this.initialized = false;
-    console.log('[TransformersWebGPU] Disposed');
+  async generateImage(_params: GenerationParams): Promise<void> {
+    throw new Error('text-to-image pipeline not yet supported by Transformers.js WebGPU backend');
   }
 
   async getMemoryUsage(): Promise<MemoryInfo> {
-    const memory = (performance as any).memory;
-    if (memory) {
-      const used = memory.usedJSHeapSize / 1024 / 1024;
-      const limit = memory.jsHeapSizeLimit / 1024 / 1024;
-      const total = memory.totalJSHeapSize / 1024 / 1024;
-      
-      return {
-        used: Math.round(used),
-        available: Math.round(limit - used),
-        peak: Math.round(total),
-      };
+    return { used: 0, total: 0 };
+  }
+
+  async dispose(): Promise<void> {
+    if (this.gpuDevice) {
+      this.gpuDevice.destroy();
+      this.gpuDevice = null;
     }
-    
-    return { used: 0, available: 4096, peak: 0 };
+
+    this.gpuAdapter = null;
   }
 }

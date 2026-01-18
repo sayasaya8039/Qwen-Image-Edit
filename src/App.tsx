@@ -210,6 +210,7 @@ export default function App() {
 
 	// バックエンド切り替え
 	const handleBackendChange = useCallback((backend: string) => {
+		console.log('[App] handleBackendChange called with:', backend);
 		setSelectedBackend(backend);
 		console.log('[App] Backend changed to:', backend);
 	}, []);
@@ -438,6 +439,7 @@ export default function App() {
 				enabledImageCount={images.filter((img) => img.enabled).length}
 				editMode={editMode}
 				backendState={backend}
+				selectedBackend={selectedBackend}
 			/>
 		</div>
 	);

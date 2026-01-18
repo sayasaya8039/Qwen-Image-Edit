@@ -8,6 +8,7 @@ interface StatusBarProps {
 	enabledImageCount: number;
 	editMode: EditMode;
 	backendState?: BackendState;
+	selectedBackend?: string;
 }
 
 const modeLabels: Record<EditMode, string> = {
@@ -22,6 +23,7 @@ export function StatusBar({
 	enabledImageCount,
 	editMode,
 	backendState,
+	selectedBackend,
 }: StatusBarProps) {
 	const [backend, setBackend] = useState<BackendStatus | null>(null);
 	const [showLocalModal, setShowLocalModal] = useState(false);
@@ -70,6 +72,7 @@ export function StatusBar({
 					<BackendIndicator
 						backend={backend}
 						backendState={backendState}
+					selectedBackend={selectedBackend}
 						onLocalClick={() => setShowLocalModal(true)}
 					/>
 					<span>{modeLabels[editMode]}</span>
@@ -101,10 +104,19 @@ function StatusIndicator({ isProcessing }: { isProcessing: boolean }) {
 interface BackendIndicatorProps {
 	backend: BackendStatus | null;
 	backendState?: BackendState;
+	selectedBackend?: string;
 	onLocalClick: () => void;
 }
 
-function BackendIndicator({ backend, backendState, onLocalClick }: BackendIndicatorProps) {
+function BackendIndicator({ backend, backendState, selectedBackend, onLocalClick }: BackendIndicatorProps) {
+	// デバッグログ追加
+	console.log('[StatusBar] BackendIndicator render:', {
+		selectedBackend,
+		currentBackend: backendState?.currentBackend,
+		availableBackends: backendState?.availableBackends,
+		initialized: backendState?.initialized
+	});
+
 	// 新しいbackendStateがある場合はそちらを優先
 	if (backendState) {
 		if (backendState.initializing) {
@@ -126,7 +138,10 @@ function BackendIndicator({ backend, backendState, onLocalClick }: BackendIndica
 		}
 		
 if (backendState.initialized && backendState.availableBackends.length > 0) {
-			const backend = backendState.currentBackend || backendState.availableBackends[0];
+			// 手動選択されたバックエンドを優先、なければcurrentBackend、最後にavailableBackends[0]
+			const backend = (selectedBackend && selectedBackend !== 'auto' ? selectedBackend : null) 
+				|| backendState.currentBackend 
+				|| backendState.availableBackends[0];
 			const backendNames: Record<string, string> = {
 				'transformers-wasm': 'CPU (Wasm)',
 				'transformers-webgpu': 'WebGPU',

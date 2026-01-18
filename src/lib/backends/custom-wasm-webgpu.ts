@@ -97,32 +97,75 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
       const width = params.width || 512;
       const height = params.height || 512;
 
-      const computePipeline = await this.createComputePipeline(width, height);
+      // 出力バッファを作成
       const outputBuffer = this.device.createBuffer({
-        size: width * height * 4,
+        size: width * height * 4 * 4, // vec4<f32> = 16 bytes per pixel
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
       });
 
+      // バインドグループレイアウトを明示的に作成
+      const bindGroupLayout = this.device.createBindGroupLayout({
+        entries: [
+          {
+            binding: 0,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: {
+              type: 'storage',
+            },
+          },
+        ],
+      });
+
+      // バインドグループを作成
+      const bindGroup = this.device.createBindGroup({
+        layout: bindGroupLayout,
+        entries: [
+          {
+            binding: 0,
+            resource: {
+              buffer: outputBuffer,
+            },
+          },
+        ],
+      });
+
+      // パイプラインレイアウトを作成
+      const pipelineLayout = this.device.createPipelineLayout({
+        bindGroupLayouts: [bindGroupLayout],
+      });
+
+      // コンピュートパイプラインを作成
+      const computePipeline = await this.createComputePipeline(width, height, pipelineLayout);
+
+      // コマンドエンコーダーでコンピュート処理を実行
       const commandEncoder = this.device.createCommandEncoder();
       const passEncoder = commandEncoder.beginComputePass();
       passEncoder.setPipeline(computePipeline);
+      passEncoder.setBindGroup(0, bindGroup); // ★ バインドグループを設定
       passEncoder.dispatchWorkgroups(Math.ceil(width / 8), Math.ceil(height / 8));
       passEncoder.end();
 
       this.device.queue.submit([commandEncoder.finish()]);
 
       const readBuffer = this.device.createBuffer({
-        size: width * height * 4,
+        size: width * height * 4 * 4,
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
       });
 
       const copyEncoder = this.device.createCommandEncoder();
-      copyEncoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, width * height * 4);
+      copyEncoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, width * height * 4 * 4);
       this.device.queue.submit([copyEncoder.finish()]);
 
       await readBuffer.mapAsync(GPUMapMode.READ);
       const arrayBuffer = readBuffer.getMappedRange();
-      const imageData = new Uint8ClampedArray(arrayBuffer);
+      
+      // Float32からUint8Clampedに変換
+      const float32Data = new Float32Array(arrayBuffer);
+      const imageData = new Uint8ClampedArray(width * height * 4);
+      
+      for (let i = 0; i < width * height * 4; i++) {
+        imageData[i] = Math.floor(float32Data[i] * 255);
+      }
 
       const canvas = document.createElement('canvas');
       canvas.width = width;
@@ -153,7 +196,11 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
     }
   }
 
-  private async createComputePipeline(width: number, height: number): Promise<GPUComputePipeline> {
+  private async createComputePipeline(
+    width: number, 
+    height: number,
+    pipelineLayout: GPUPipelineLayout
+  ): Promise<GPUComputePipeline> {
     if (!this.device) throw new Error('Device not initialized');
 
     const shaderCode = `
@@ -177,7 +224,7 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
     });
 
     return this.device.createComputePipeline({
-      layout: 'auto',
+      layout: pipelineLayout, // 明示的なレイアウトを使用
       compute: {
         module: shaderModule,
         entryPoint: 'main',
