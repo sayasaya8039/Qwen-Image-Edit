@@ -13,7 +13,7 @@ export default defineConfig({
 		},
 	},
 	optimizeDeps: {
-		exclude: ["@assemblyscript/loader"]
+		exclude: ["@assemblyscript/loader", "web-txt2img", "@xenova/transformers"]
 	},
 	assetsInclude: ['**/*.wgsl']
 });

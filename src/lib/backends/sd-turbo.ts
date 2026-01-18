@@ -27,27 +27,14 @@ export class SDTurboBackend implements BackendExecutor {
       const module = await import('web-txt2img');
       Txt2ImgWorkerClient = module.Txt2ImgWorkerClient;
 
-      // SD-Turboクライアント作成
-      this.client = new Txt2ImgWorkerClient({
-        model: 'sd-turbo', // SD-Turboを指定
-        device: 'webgpu',
-      });
+      // SD-Turboクライアント作成（正しいAPI）
+      this.client = Txt2ImgWorkerClient.createDefault();
 
-      // 進捗ハンドラー登録
-      this.client.addEventListener('loadstart', () => {
-        console.log('[SDTurbo] Model loading started...');
+      // モデルをロード
+      console.log('[SDTurbo] Loading sd-turbo model...');
+      await this.client.load('sd-turbo', { 
+        backendPreference: ['webgpu']
       });
-
-      this.client.addEventListener('progress', (event: any) => {
-        console.log(`[SDTurbo] Loading progress: ${event.detail.progress.toFixed(1)}%`);
-      });
-
-      this.client.addEventListener('loadend', () => {
-        console.log('[SDTurbo] Model loaded successfully');
-      });
-
-      // モデル初期化（最初の生成時に自動ロード）
-      await this.client.load();
 
       this.initialized = true;
       console.log('[SDTurbo] Initialization complete');
@@ -100,8 +87,8 @@ export class SDTurboBackend implements BackendExecutor {
       const height = params.height || 512;
       const seed = params.seed !== undefined ? params.seed : Math.floor(Math.random() * 2147483647);
 
-      // SD-Turboで画像生成
-      const result = await this.client.generate({
+      // SD-Turboで画像生成（正しいAPI）
+      const { promise } = this.client.generate({
         prompt: params.prompt,
         width,
         height,
@@ -109,8 +96,11 @@ export class SDTurboBackend implements BackendExecutor {
         num_inference_steps: 1, // Turboは1ステップで高速生成
       });
 
+      // promiseを待つ
+      const result = await promise;
+
       // 結果からBlobを取得
-      if (!result || !result.blob) {
+      if (!result || !result.ok || !result.blob) {
         throw new Error('No image generated');
       }
 
