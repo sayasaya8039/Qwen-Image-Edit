@@ -8,6 +8,7 @@ export class TransformersWasmBackend implements BackendExecutor {
   
   private generator: any = null;
   private initialized = false;
+  private warnedUnavailable = false;
 
   async init(): Promise<void> {
     if (this.initialized) return;
@@ -38,8 +39,11 @@ export class TransformersWasmBackend implements BackendExecutor {
   }
 
   async isAvailable(): Promise<boolean> {
-    // Wasmは常に利用可能
-    return true;
+    if (!this.warnedUnavailable) {
+      console.warn('[TransformersWasm] text-to-image pipeline is not supported by current Transformers.js build');
+      this.warnedUnavailable = true;
+    }
+    return false;
   }
 
   getCapabilities(): BackendCapabilities {

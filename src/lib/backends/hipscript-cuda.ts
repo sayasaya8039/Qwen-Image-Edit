@@ -15,6 +15,8 @@ export class HipScriptCudaBackend implements BackendExecutor {
   private wasmInstance: WebAssembly.Instance | null = null;
   private cudaKernels: Map<string, Function> = new Map();
   private initialized = false;
+  private readonly wasmUrl = '/wasm/cuda-kernels.wasm';
+  private warnedUnavailable = false;
 
   async init(): Promise<void> {
     if (this.initialized) return;
@@ -23,11 +25,15 @@ export class HipScriptCudaBackend implements BackendExecutor {
       console.log('[HipScriptCuda] Initializing...');
 
       // HipScript CUDAカーネルをコンパイル済みWasmとして読み込み
-      const wasmUrl = '/wasm/cuda-kernels.wasm';
-      
       try {
-        const response = await fetch(wasmUrl);
+        const response = await fetch(this.wasmUrl);
+        if (!response.ok) {
+          throw new Error(`Wasm module not found: ${this.wasmUrl}`);
+        }
         const wasmBuffer = await response.arrayBuffer();
+        if (!this.isValidWasmBinary(wasmBuffer)) {
+          throw new Error(`Invalid wasm response: ${this.wasmUrl}`);
+        }
         this.wasmModule = await WebAssembly.compile(wasmBuffer);
         
         const memory = new WebAssembly.Memory({ initial: 512, maximum: 1024 });
@@ -76,13 +82,12 @@ export class HipScriptCudaBackend implements BackendExecutor {
     }
 
     // HipScript CUDAカーネルの存在確認
-    try {
-      const response = await fetch('/wasm/cuda-kernels.wasm');
-      return response.ok;
-    } catch {
+    const available = await this.isWasmBinaryAvailable();
+    if (!available && !this.warnedUnavailable) {
       console.log('[HipScriptCuda] CUDA kernels not found');
-      return false;
+      this.warnedUnavailable = true;
     }
+    return available;
   }
 
   getCapabilities(): BackendCapabilities {
@@ -238,5 +243,22 @@ export class HipScriptCudaBackend implements BackendExecutor {
       available: 4000,
       peak: 0,
     };
+  }
+
+  private async isWasmBinaryAvailable(): Promise<boolean> {
+    try {
+      const response = await fetch(this.wasmUrl);
+      if (!response.ok) return false;
+      const buffer = await response.arrayBuffer();
+      return this.isValidWasmBinary(buffer);
+    } catch {
+      return false;
+    }
+  }
+
+  private isValidWasmBinary(buffer: ArrayBuffer): boolean {
+    if (buffer.byteLength < 4) return false;
+    const magic = new Uint8Array(buffer.slice(0, 4));
+    return magic[0] === 0x00 && magic[1] === 0x61 && magic[2] === 0x73 && magic[3] === 0x6d;
   }
 }

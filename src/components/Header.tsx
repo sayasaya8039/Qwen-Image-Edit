@@ -1,3 +1,5 @@
+import { APP_VERSION } from '../constants';
+
 interface HeaderProps {
 	onSave: (format: "png" | "jpeg") => void;
 	hasOutput: boolean;
@@ -19,7 +21,7 @@ export function Header({ onSave, hasOutput }: HeaderProps) {
 					</svg>
 					<span className="font-semibold text-sm">Qwen Image Edit</span>
 				</div>
-				<span className="text-xs text-[var(--ps-text-muted)]">v1.0.0</span>
+				<span className="text-xs text-[var(--ps-text-muted)]">v{APP_VERSION}</span>
 			</div>
 
 			{/* メニュー */}

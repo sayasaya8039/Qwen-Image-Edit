@@ -280,8 +280,12 @@ export default function App() {
 				guidanceScale: 0.0, // sd-turboはCFG不要
 				preferOffline: true,
 				prioritizeSpeed: false,
+				preferredBackend: selectedBackend,
+				aspectRatio,
+				resolution: Number(resolution),
 			});
 
+			console.log('[handleGenerate] Blob received:', { size: blob.size, type: blob.type });
 			setStatus({ isProcessing: true, progress: 70, message: "画像を処理中..." });
 
 			// BlobをData URLに変換
@@ -291,6 +295,8 @@ export default function App() {
 				reader.onerror = reject;
 				reader.readAsDataURL(blob);
 			});
+			
+			console.log('[handleGenerate] Data URL created:', { length: dataUrl.length, preview: dataUrl.substring(0, 100) });
 
 			// CUDA後処理を適用（動画以外）
 			if (cudaConfig.enabled && cudaConfig.postprocessing) {
@@ -329,18 +335,22 @@ export default function App() {
 					setOutputImage(dataUrl);
 				}
 			} else {
+				console.log('[handleGenerate] Setting output image (no CUDA)');
 				setOutputImage(dataUrl);
+				console.log('[handleGenerate] Output image set:', { length: dataUrl.length });
 			}
 
 			// バックエンド情報を表示
 			const backendName = backend.currentBackend || "不明";
 			const cudaInfo = cudaConfig.enabled ? " + CUDA処理" : "";
 
+			console.log('[handleGenerate] Setting final status:', { backendName, cudaInfo });
 			setStatus({
 				isProcessing: false,
 				progress: 100,
 				message: `✓ ${backendName} (ローカル${cudaInfo}) で生成完了`,
 			});
+			console.log('[handleGenerate] Status updated to isProcessing: false');
 		} catch (error) {
 			console.error("Generation error:", error);
 			setStatus({

@@ -1,6 +1,6 @@
 {
   "name": "qwen-image-edit",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"bun run dev:client\" \"bun run dev:server\"",
@@ -26,7 +26,8 @@
     "react-dom": "^19.1.0",
     "react-dropzone": "^14.3.8",
     "react-router-dom": "^7.11.0",
-    "zod": "^4.2.1"
+    "zod": "^4.2.1",
+    "web-txt2img": "^0.3.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",

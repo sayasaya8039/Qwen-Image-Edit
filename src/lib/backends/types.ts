@@ -4,7 +4,7 @@ export interface BackendCapabilities {
   supportsImageProcessing: boolean;
   supportsOffline: boolean;
   maxModelSize: number; // MB
-  estimatedSpeed: 'fast' | 'medium' | 'slow';
+  estimatedSpeed: 'very-fast' | 'fast' | 'medium' | 'slow';
 }
 
 export interface BackendExecutor {
@@ -34,6 +34,8 @@ export enum BackendType {
   CUSTOM_WASM_WEBGPU = 'custom-wasm-webgpu',
   HIPSCRIPT_CUDA = 'hipscript-cuda',
   CLOUD = 'cloud',
+  WORKER_API = 'worker-api',
+  SD_TURBO = 'sd-turbo',
 }
 
 export interface GenerationParams {
@@ -44,6 +46,8 @@ export interface GenerationParams {
   steps?: number;
   seed?: number;
   guidanceScale?: number;
+  aspectRatio?: string;
+  resolution?: number;
 }
 
 export interface MemoryInfo {

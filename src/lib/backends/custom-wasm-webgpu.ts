@@ -14,7 +14,10 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
   private device: GPUDevice | null = null;
   private wasmModule: WebAssembly.Module | null = null;
   private wasmInstance: WebAssembly.Instance | null = null;
+  private wasmAvailable = false;
+  private readonly wasmUrl = '/wasm/image-model.wasm';
   private initialized = false;
+  private warnedUnavailable = false;
 
   async init(): Promise<void> {
     if (this.initialized) return;
@@ -23,35 +26,39 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
       console.log('[CustomWasmWebGPU] Initializing...');
 
       // WebGPU初期化
-      if ('gpu' in navigator) {
-        const adapter = await navigator.gpu.requestAdapter({
-          powerPreference: 'high-performance',
-        });
-        
-        if (adapter) {
-          this.device = await adapter.requestDevice();
-          console.log('[CustomWasmWebGPU] WebGPU device acquired');
-        }
+      if (!('gpu' in navigator)) {
+        throw new Error('WebGPU not supported');
       }
 
-      // カスタムWasmモジュール読み込み
-      const wasmUrl = '/wasm/image-model.wasm';
+      const adapter = await navigator.gpu.requestAdapter({
+        powerPreference: 'high-performance',
+      });
       
+      if (!adapter) {
+        throw new Error('WebGPU adapter not available');
+      }
+
+      this.device = await adapter.requestDevice();
+      console.log('[CustomWasmWebGPU] WebGPU device acquired');
+
+      // Wasmモジュールはオプション（なくても動作する）
       try {
-        const response = await fetch(wasmUrl);
-        const wasmBuffer = await response.arrayBuffer();
-        this.wasmModule = await WebAssembly.compile(wasmBuffer);
-        
-        const imports = {
-          env: {
-            memory: new WebAssembly.Memory({ initial: 256, maximum: 512 }),
-          },
-        };
-        
-        this.wasmInstance = await WebAssembly.instantiate(this.wasmModule, imports);
-        console.log('[CustomWasmWebGPU] Wasm module loaded');
+        const response = await fetch(this.wasmUrl);
+        if (response.ok) {
+          const wasmBuffer = await response.arrayBuffer();
+          if (this.isValidWasmBinary(wasmBuffer)) {
+            this.wasmModule = await WebAssembly.compile(wasmBuffer);
+            const imports = {
+              env: {
+                memory: new WebAssembly.Memory({ initial: 256, maximum: 512 }),
+              },
+            };
+            this.wasmInstance = await WebAssembly.instantiate(this.wasmModule, imports);
+            console.log('[CustomWasmWebGPU] Wasm module loaded (optional)');
+          }
+        }
       } catch (error) {
-        console.warn('[CustomWasmWebGPU] Wasm module not found, running without Wasm');
+        console.log('[CustomWasmWebGPU] Running without Wasm (GPU-only mode)');
       }
 
       this.initialized = true;
@@ -62,19 +69,29 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
     }
   }
 
+
   async isAvailable(): Promise<boolean> {
+    // WebGPUが利用可能かチェック
     if (!('gpu' in navigator)) {
       console.log('[CustomWasmWebGPU] WebGPU not available');
       return false;
     }
 
-    if (typeof WebAssembly === 'undefined') {
-      console.log('[CustomWasmWebGPU] WebAssembly not available');
+    // WebGPUアダプターが取得できるかテスト
+    try {
+      const adapter = await navigator.gpu.requestAdapter();
+      if (!adapter) {
+        console.log('[CustomWasmWebGPU] WebGPU adapter not available');
+        return false;
+      }
+      console.log('[CustomWasmWebGPU] WebGPU is available ✅');
+      return true;
+    } catch (error) {
+      console.log('[CustomWasmWebGPU] WebGPU check failed:', error);
       return false;
     }
-
-    return true;
   }
+
 
   getCapabilities(): BackendCapabilities {
     return {
@@ -146,6 +163,9 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
       passEncoder.end();
 
       this.device.queue.submit([commandEncoder.finish()]);
+      
+      // GPU処理の完了を待つ
+      await this.device.queue.onSubmittedWorkDone();
 
       const readBuffer = this.device.createBuffer({
         size: width * height * 4 * 4,
@@ -155,6 +175,9 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
       const copyEncoder = this.device.createCommandEncoder();
       copyEncoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, width * height * 4 * 4);
       this.device.queue.submit([copyEncoder.finish()]);
+      
+      // コピー完了を待つ
+      await this.device.queue.onSubmittedWorkDone();
 
       await readBuffer.mapAsync(GPUMapMode.READ);
       const arrayBuffer = readBuffer.getMappedRange();
@@ -163,9 +186,22 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
       const float32Data = new Float32Array(arrayBuffer);
       const imageData = new Uint8ClampedArray(width * height * 4);
       
+      console.log('[CustomWasmWebGPU] Buffer info:', {
+        arrayBufferSize: arrayBuffer.byteLength,
+        float32Length: float32Data.length,
+        expectedLength: width * height * 4,
+        firstValues: Array.from(float32Data.slice(0, 16))
+      });
+      
       for (let i = 0; i < width * height * 4; i++) {
         imageData[i] = Math.floor(float32Data[i] * 255);
       }
+      
+      console.log('[CustomWasmWebGPU] ImageData info:', {
+        imageDataLength: imageData.length,
+        firstValues: Array.from(imageData.slice(0, 16)),
+        nonZeroCount: Array.from(imageData).filter(v => v > 0).length
+      });
 
       const canvas = document.createElement('canvas');
       canvas.width = width;
@@ -176,14 +212,23 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
 
       const imgData = new ImageData(imageData, width, height);
       ctx.putImageData(imgData, 0, 0);
+      
+      console.log('[CustomWasmWebGPU] Canvas info:', {
+        width: canvas.width,
+        height: canvas.height,
+        dataUrl: canvas.toDataURL('image/png').substring(0, 100)
+      });
 
       return new Promise((resolve, reject) => {
         canvas.toBlob((blob) => {
+          console.log('[CustomWasmWebGPU] toBlob callback:', { blob: blob ? { size: blob.size, type: blob.type } : null });
+          
           readBuffer.unmap();
           outputBuffer.destroy();
           readBuffer.destroy();
 
           if (blob) {
+            console.log('[CustomWasmWebGPU] Blob created successfully:', { size: blob.size });
             resolve(blob);
           } else {
             reject(new Error('Failed to create blob'));
@@ -213,8 +258,12 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
         let index = global_id.y * width + global_id.x;
         
         if (global_id.x < width && global_id.y < height) {
-          let noise = fract(sin(f32(index) * 43758.5453));
-          output[index] = vec4<f32>(noise, noise, noise, 1.0);
+          // 可視的なグラデーション生成（検証用）
+          let x = f32(global_id.x) / f32(width);
+          let y = f32(global_id.y) / f32(height);
+          
+          // R=横方向グラデーション、G=縦方向グラデーション、B=固定値
+          output[index] = vec4<f32>(x, y, 0.5, 1.0);
         }
       }
     `;
@@ -224,13 +273,15 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
     });
 
     return this.device.createComputePipeline({
-      layout: pipelineLayout, // 明示的なレイアウトを使用
+      layout: pipelineLayout,
       compute: {
         module: shaderModule,
         entryPoint: 'main',
       },
     });
   }
+
+
 
   async processImage(input: ImageData, operation: string): Promise<ImageData> {
     console.log('[CustomWasmWebGPU] Processing image:', operation);
@@ -265,5 +316,22 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
       available: 3000,
       peak: 0,
     };
+  }
+
+  private async isWasmBinaryAvailable(): Promise<boolean> {
+    try {
+      const response = await fetch(this.wasmUrl);
+      if (!response.ok) return false;
+      const buffer = await response.arrayBuffer();
+      return this.isValidWasmBinary(buffer);
+    } catch {
+      return false;
+    }
+  }
+
+  private isValidWasmBinary(buffer: ArrayBuffer): boolean {
+    if (buffer.byteLength < 4) return false;
+    const magic = new Uint8Array(buffer.slice(0, 4));
+    return magic[0] === 0x00 && magic[1] === 0x61 && magic[2] === 0x73 && magic[3] === 0x6d;
   }
 }

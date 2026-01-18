@@ -9,6 +9,8 @@ import { CloudBackend } from '../lib/backends/cloud';
 import { TransformersWebNNWasmBackend } from '../lib/backends/transformers-webnn-wasm';
 import { CustomWasmWebGPUBackend } from '../lib/backends/custom-wasm-webgpu';
 import { HipScriptCudaBackend } from '../lib/backends/hipscript-cuda';
+import { WorkerApiBackend } from '../lib/backends/worker-api';
+import { SDTurboBackend } from '../lib/backends/sd-turbo';
 import type { GenerationParams, BackendType } from '../lib/backends/types';
 
 export interface BackendState {
@@ -61,6 +63,8 @@ export function useBackend() {
         const customWasmWebGPUBackend = new CustomWasmWebGPUBackend();
         const hipScriptCudaBackend = new HipScriptCudaBackend();
         const cloudBackend = new CloudBackend();
+        const workerApiBackend = new WorkerApiBackend();
+        const sdTurboBackend = new SDTurboBackend();
 
         await Promise.allSettled([
           selector.registerBackend(wasmBackend),
@@ -69,10 +73,21 @@ export function useBackend() {
           selector.registerBackend(customWasmWebGPUBackend),
           selector.registerBackend(hipScriptCudaBackend),
           selector.registerBackend(cloudBackend),
+          selector.registerBackend(workerApiBackend),
+          selector.registerBackend(sdTurboBackend),
         ]);
+
+        // デバッグ: 各バックエンドの利用可否をログ出力
+        const allBackends = selector.getAllBackends();
+        console.log('[useBackend] Checking backend availability...');
+        for (const backend of allBackends) {
+          const isAvail = await backend.isAvailable();
+          console.log(`[useBackend] ${backend.name} (${backend.type}): ${isAvail ? '✅ Available' : '❌ Not available'}`);
+        }
 
         // 利用可能なバックエンド
         const available = selector.getAvailableTypes();
+        console.log('[useBackend] Available backends:', available);
 
         if (available.length === 0) {
           throw new Error('No backends available');
@@ -145,7 +160,7 @@ export function useBackend() {
 
     // 選択基準
     const criteria = {
-      modelSize: 1000, // 1GB
+      modelSize: 500, // 500MB (TransformersWasmを許容)
       preferOffline: options.preferOffline ?? true,
       prioritizeSpeed: options.prioritizeSpeed ?? false,
       needsImageGeneration: true,

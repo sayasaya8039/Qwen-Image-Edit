@@ -58,6 +58,7 @@ const BACKEND_OPTIONS = [
 	{ value: 'transformers-webnn-wasm', label: 'WebNN + Wasm' },
 	{ value: 'custom-wasm-webgpu', label: 'Custom GPU' },
 	{ value: 'hipscript-cuda', label: 'HipScript CUDA' },
+	{ value: 'worker-api', label: 'Cloudflare API' },
 	{ value: 'cloud', label: 'Cloud API' },
 ];
 
