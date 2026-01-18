@@ -217,6 +217,14 @@ export default function App() {
 	// 画像生成/編集
 	const handleGenerate = useCallback(async () => {
 		if (!prompt.trim()) {
+		console.log('[handleGenerate] START - prompt:', prompt);
+		console.log('[handleGenerate] backend state:', {
+			initialized: backend.initialized,
+			initializing: backend.initializing,
+			error: backend.error,
+			availableBackends: backend.availableBackends
+		});
+		
 			setStatus({
 				isProcessing: false,
 				progress: 0,
@@ -227,6 +235,7 @@ export default function App() {
 
 		// バックエンド初期化チェック
 		if (!backend.initialized) {
+			console.log('[handleGenerate] STOP: backend not initialized');
 			if (backend.initializing) {
 				setStatus({
 					isProcessing: false,
@@ -245,6 +254,7 @@ export default function App() {
 			}
 		}
 
+		console.log('[handleGenerate] Proceeding with generation...');
 		setStatus({ isProcessing: true, progress: 10, message: "処理を開始..." });
 		setOutputImage(null);
 		setOutputVideo(null);
