@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import type { BackendStatus, EditMode, GenerationStatus } from "../types";
+import type { BackendState } from "../hooks/useBackend";
 
 interface StatusBarProps {
 	status: GenerationStatus;
 	imageCount: number;
 	enabledImageCount: number;
 	editMode: EditMode;
+	backendState?: BackendState;
 }
 
 const modeLabels: Record<EditMode, string> = {
@@ -19,6 +21,7 @@ export function StatusBar({
 	imageCount,
 	enabledImageCount,
 	editMode,
+	backendState,
 }: StatusBarProps) {
 	const [backend, setBackend] = useState<BackendStatus | null>(null);
 	const [showLocalModal, setShowLocalModal] = useState(false);
@@ -66,6 +69,7 @@ export function StatusBar({
 				<div className="flex items-center gap-4 text-[var(--ps-text-muted)]">
 					<BackendIndicator
 						backend={backend}
+						backendState={backendState}
 						onLocalClick={() => setShowLocalModal(true)}
 					/>
 					<span>{modeLabels[editMode]}</span>
@@ -96,10 +100,59 @@ function StatusIndicator({ isProcessing }: { isProcessing: boolean }) {
 
 interface BackendIndicatorProps {
 	backend: BackendStatus | null;
+	backendState?: BackendState;
 	onLocalClick: () => void;
 }
 
-function BackendIndicator({ backend, onLocalClick }: BackendIndicatorProps) {
+function BackendIndicator({ backend, backendState, onLocalClick }: BackendIndicatorProps) {
+	// 新しいbackendStateがある場合はそちらを優先
+	if (backendState) {
+		if (backendState.initializing) {
+			return (
+				<div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-gray-700/50">
+					<div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse" />
+					<span>初期化中...</span>
+				</div>
+			);
+		}
+		
+		if (backendState.error) {
+			return (
+				<div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-900/30 border border-red-700/50">
+					<div className="w-2 h-2 rounded-full bg-[var(--ps-error)]" />
+					<span className="text-red-400" title={backendState.error}>エラー</span>
+				</div>
+			);
+		}
+		
+		if (backendState.initialized && backendState.availableBackends.length > 0) {
+			const backend = backendState.currentBackend || backendState.availableBackends[0];
+			const backendNames: Record<string, string> = {
+				'transformers-wasm': 'CPU (Wasm)',
+				'transformers-webgpu': 'WebGPU',
+				'transformers-webnn-wasm': 'WebNN+Wasm',
+				'custom-wasm-webgpu': 'Custom GPU',
+				'hipscript-cuda': 'HipScript',
+				'cloud': 'Cloud API',
+			};
+			
+			const isGpu = backend && (backend.includes('webgpu') || backend.includes('cuda') || backend.includes('hipscript'));
+			
+			return (
+				<div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-green-900/30 border border-green-700/50" title={`利用可能: ${backendState.availableBackends.length}個のバックエンド`}>
+					<div className="w-2 h-2 rounded-full bg-green-400" />
+					<span>
+						<span className="text-green-400">ローカル</span>
+						<span className="mx-1 text-[var(--ps-text-muted)]">|</span>
+						<span className={isGpu ? "text-green-400" : "text-yellow-400"}>
+							{backendNames[backend] || backend}
+						</span>
+					</span>
+				</div>
+			);
+		}
+	}
+	
 	if (!backend) {
 		return (
 			<div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-gray-700/50">

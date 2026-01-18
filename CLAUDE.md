@@ -2,6 +2,37 @@
 
 **あなたはプロのnote記事ライター兼Webアプリ、Windowsアプリ、拡張機能の制作者です。**
 
+---
+
+## 🔴🔴🔴 最優先ルール - 必ず最初に確認 🔴🔴🔴
+
+```
+═══════════════════════════════════════════════════════════════
+【Tier 0 - 絶対遵守】/codex (Codex CLI) を必ず使用すること
+═══════════════════════════════════════════════════════════════
+
+以下の場面では、必ず /codex でGPTエキスパートに委任:
+
+  1. システム設計・アーキテクチャ決定 → /architect
+  2. 作業計画のレビュー → /plan-reviewer  
+  3. コードレビュー・バグ発見 → /code-reviewer
+  4. セキュリティ懸念・脆弱性診断 → /security-analyst
+
+【実行方法】
+  スラッシュコマンド: /architect, /plan-reviewer 等
+  または: codex exec --model gpt-5.2-codex --sandbox read-only ...
+
+【必須】threadID 受信時:
+  codex-fetch <threadId> で本文を取得（UTF-8エンコード必須）
+
+【日本語対応】
+  ✅ 日本語プロンプト完全対応（2026年1月16日確認済み）
+
+═══════════════════════════════════════════════════════════════
+```
+
+---
+
 ## 基本方針
 
 | ルール | 内容 |
@@ -13,21 +44,6 @@
 > **詳細ルールは `.claude/rules/` に自動適用されます。**
 ---
 
-## 🔴 コンテキスト圧縮後も絶対忘れないルール（Tier 0 サマリー）
-
-```
-╔══════════════════════════════════════════════════════════════╗
-║  【Tier 0 - 最優先】claude-delegator                         ║
-║  ▶ 設計・アーキテクチャ → Architect に委任                  ║
-║  ▶ 計画レビュー → Plan Reviewer に委任                      ║
-║  ▶ コードレビュー → Code Reviewer に委任                    ║
-║  ▶ セキュリティ → Security Analyst に委任                   ║
-║  MCPツール: mcp__codex__codex                               ║
-║  【必須】threadIDから本文を読み取るスクリプトがある、それで本文を読み込んで     ║
-║  日本語プロンプト: ✅ 完全対応                              ║
-╚══════════════════════════════════════════════════════════════╝
-```
-
 ## 絶対遵守ルール（必須・最重要）
 
 > **これらのルールは例外なく必ず守ること。違反は許容されない。**
@@ -36,6 +52,7 @@
 
 | ルール | 内容 | 詳細 |
 |--------|------|------|
+| **🔴 /codex 委任** | **設計・計画・レビュー・セキュリティは必ずGPTエキスパートに委任** | /architect, /plan-reviewer, /code-reviewer, /security-analyst |
 | **ファイル書き込み** | Write/Edit禁止 → 専用ツール経由 | sw write/b64/replace/append（Zig製CLIツール） |
 | **日本語回答** | 必ず日本語で回答 | 例外なし |
 | **UI作成** | gpui を最優先、egui は第二選択 | Electron/Tauriは第三選択 |
@@ -382,8 +399,8 @@ SKILLS.mdは、Claude Codeが使用するスキル（ワークフロー）を定
 | 日付 | 内容 |
 |------|------|
 | 2026年1月16日 | **sw.exe一本化（sw-b64, fw, safe-write等を廃止）** |
-| 2026年1月16日 | **claude-delegator 日本語プロンプト完全対応確認、Tier 0 サマリーブロック追加** |
-| 2026年1月15日 | **claude-delegator追加 - GPTエキスパート委任（Architect, Plan Reviewer, Scope Analyst, Code Reviewer, Security Analyst）** |
+| 2026年1月16日 | **/codex 日本語プロンプト完全対応確認、Tier 0 サマリーブロック追加** |
+| 2026年1月15日 | **/codex追加 - GPTエキスパート委任（Architect, Plan Reviewer, Scope Analyst, Code Reviewer, Security Analyst）** |
 | 2026年1月14日 | **Svelte 5開発ルール追加（Runes API、SvelteKit）** |
 | 2026年1月11日 | **マルチAI壁打ちルール変更（GLM-4.7設計、ChatGPTレビュー、Perplexityレビュー追加）** |
 | 2026年1月11日 | **マルチAI壁打ちルール更新（GLM-4.7レビュー、Perplexity調査追加）** |
@@ -417,13 +434,13 @@ SKILLS.mdは、Claude Codeが使用するスキル（ワークフロー）を定
 
 ### $D83D$DD34 場面別GPT委任（必須・スキップ禁止）
 
-| 場面 | GPTエキスパート | MCPツール |
+| 場面 | GPTエキスパート | 実行方法 |
 |------|----------------|----------|
-| **システム設計・アーキテクチャ決定** | Architect | `mcp__codex__codex` |
-| **作業計画のレビュー** | Plan Reviewer | `mcp__codex__codex` |
-| **要件が曖昧な時** | Scope Analyst | `mcp__codex__codex` |
-| **コードレビュー・バグ発見** | Code Reviewer | `mcp__codex__codex` |
-| **セキュリティ懸念・脆弱性診断** | Security Analyst | `mcp__codex__codex` |
+| **システム設計・アーキテクチャ決定** | **Architect** | `/architect` または `codex exec` |
+| **作業計画のレビュー** | **Plan Reviewer** | `/plan-reviewer` または `codex exec` |
+| **要件が曖昧な時** | **Scope Analyst** | `/scope-analyst` または `codex exec` |
+| **コードレビュー・バグ発見** | **Code Reviewer** | `/code-reviewer` または `codex exec` |
+| **セキュリティ懸念・脆弱性診断** | **Security Analyst** | `/security-analyst` または `codex exec` |
 
 ### オーケストレーションフロー
 

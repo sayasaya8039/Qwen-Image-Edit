@@ -3,69 +3,57 @@ paths: "**/*"
 alwaysApply: true
 ---
 
-# ファイル書き込みルール（最重要）
+# File Writing Rules (CRITICAL)
 
-> **Write/Editツールを直接使用せず、`sw` コマンドを使用すること**
+> **NEVER use Write/Edit tools directly. ALWAYS use sw command**
 
-## なぜswを使うのか
+## MANDATORY RULES (ABSOLUTE)
 
-Write/Editツールを直接使用すると：
-- バッククォートのエスケープエラー
-- 特殊文字の解釈エラー
-- ファイル変更検知エラー
-- トークンの無駄遣い
+### DO - Correct Methods
 
-が頻発するため、Zig製の専用CLIツール「sw」を使用する。
+Priority 1: sw write/b64 directly (Simple arguments via Bash tool)
+Priority 2: Python + sw b64 (For multi-line or special chars)
 
-## sw コマンド（Safe Write CLI）
+### NEVER DO - Prohibited
 
-**バイナリ:** `C:\Users\Owner\.local\bin\sw.exe`（PATHに登録済み）
+- NEVER use Bash heredoc + sw write (too complex, error-prone)
+- NEVER use complex Bash syntax (quote escape hell)
+- NEVER use Write/Edit tool directly
 
-### 基本コマンド
+### Correct Examples
 
-| コマンド | 説明 |
-|----------|------|
-| `sw write <path> <content>` | ファイル書き込み（アトミック） |
-| `sw b64 <path> <base64>` | Base64デコードして書き込み |
-| `sw replace <path> <old> <new>` | 文字列置換 |
-| `sw append <path> <content>` | ファイル追記 |
-| `sw read <path>` | ファイル読み込み |
-| `sw read64 <path>` | Base64でファイル読み込み |
-| `sw backup <path>` | .bakバックアップ作成 |
-| `sw version` | バージョン表示 |
-| `sw help` | ヘルプ表示 |
+Simple: sw write "file.ts" "content"
+Complex: python3 with subprocess.run(['sw', 'b64', path, encoded])
 
-### 使用例
+## Why Use sw?
 
-```bash
-# ファイル全体を書き込む
-sw write "src/index.ts" "console.log('Hello World')"
+Direct Write/Edit causes:
+- Backtick escape errors
+- Special char interpretation errors
+- File change detection errors
+- Token waste
 
-# Base64エンコードした内容を書き込む（特殊文字が多い場合に推奨）
-sw b64 "src/config.json" "eyJrZXkiOiAidmFsdWUifQ=="
+## sw Command Reference
 
-# 文字列を置換する
-sw replace "config.json" "localhost" "production.api.com"
+Binary: C:\Users\Owner\.local\bin\sw.exe
 
-# ファイルに追記する
-sw append "log.txt" "New log entry"
+Commands:
+- sw write <path> <content>
+- sw b64 <path> <base64>
+- sw replace <path> <old> <new>
+- sw append <path> <content>
+- sw read <path>
+- sw backup <path>
 
-# バックアップ作成
-sw backup "important.txt"
+## Prohibited
 
-# ファイル読み込み
-sw read "src/index.ts"
-```
+- NEVER Write/Edit tools
+- NEVER Bash heredoc + sw
+- NEVER complex Bash syntax
+- NEVER old tools (sw-b64, fw, safe-write)
 
-## 禁止事項
+## Allowed (Priority)
 
-- ❌ Write/Editツールを直接使用する
-- ❌ heredocを使ったファイル書き込み
-- ❌ echoリダイレクトでの複雑なファイル作成
-- ❌ cat/sedでのファイル操作
-- ❌ 旧ツール（sw-b64, fw, safe-write等）の使用
-
-## 許可される代替手段
-
-- ✅ **sw コマンド（最優先・推奨）**
-- ✅ Pythonスクリプト経由（swが使えない場合のみ）
+1. sw write/b64 directly (HIGHEST)
+2. Python + sw b64 (complex)
+3. All else PROHIBITED

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useImageResize } from "./hooks/useImageResize";
+import { useBackend } from "./hooks/useBackend";
 import { Header } from "./components/Header";
 import { ImageCanvas } from "./components/ImageCanvas";
 import { PropertiesPanel } from "./components/PropertiesPanel";
@@ -34,11 +35,13 @@ interface ModelInfo {
 export default function App() {
 	const [images, setImages] = useState<ImageFile[]>([]);
 	const { resizeImage, ready: wasmReady, loading: wasmLoading } = useImageResize();
+	const backend = useBackend();
 	const [outputImage, setOutputImage] = useState<string | null>(null);
 	const [outputVideo, setOutputVideo] = useState<string | null>(null);
 	const [prompt, setPrompt] = useState("");
 	const [negativePrompt, setNegativePrompt] = useState("");
 	const [editMode, setEditMode] = useState<EditMode>("generate");
+	const [selectedBackend, setSelectedBackend] = useState<string>("auto");
 	const [aspectRatio, setAspectRatio] = useState("1:1");
 	const [resolution, setResolution] = useState("1024");
 	const [models, setModels] = useState<ModelInfo[]>([]);
@@ -84,6 +87,7 @@ export default function App() {
 		};
 		fetchData();
 	}, []);
+
 
 	// 画像の追加（最大4枚）- WASM統合版
 	const handleAddImage = useCallback(
@@ -205,6 +209,12 @@ export default function App() {
 		setEditMode("generate");
 	}, [images]);
 
+	// バックエンド切り替え
+	const handleBackendChange = useCallback((backend: string) => {
+		setSelectedBackend(backend);
+		console.log('[App] Backend changed to:', backend);
+	}, []);
+
 	// 画像生成/編集
 	const handleGenerate = useCallback(async () => {
 		if (!prompt.trim()) {
@@ -216,115 +226,110 @@ export default function App() {
 			return;
 		}
 
+		// バックエンド初期化チェック
+		if (!backend.initialized) {
+			if (backend.initializing) {
+				setStatus({
+					isProcessing: false,
+					progress: 0,
+					message: "バックエンド初期化中...",
+				});
+				return;
+			}
+			if (backend.error) {
+				setStatus({
+					isProcessing: false,
+					progress: 0,
+					message: `バックエンドエラー: ${backend.error}`,
+				});
+				return;
+			}
+		}
+
 		setStatus({ isProcessing: true, progress: 10, message: "処理を開始..." });
 		setOutputImage(null);
 		setOutputVideo(null);
 
 		try {
-			const formData = new FormData();
-			formData.append("prompt", prompt);
-			formData.append("negative_prompt", negativePrompt);
-			formData.append("mode", editMode);
-			formData.append("aspect_ratio", aspectRatio);
-			formData.append("resolution", resolution);
-			if (selectedModelId) {
-				formData.append("modelId", selectedModelId);
-			}
+			// アスペクト比と解像度から幅と高さを計算
+			const [widthRatio, heightRatio] = aspectRatio.split(':').map(Number);
+			const baseSize = Number(resolution);
+			const isLandscape = widthRatio > heightRatio;
+			const width = isLandscape ? baseSize : Math.round(baseSize * (widthRatio / heightRatio));
+			const height = isLandscape ? Math.round(baseSize * (heightRatio / widthRatio)) : baseSize;
 
-			// 有効な画像を処理（CUDA前処理を適用）
-			const enabledImages = images.filter((img) => img.enabled);
-			
-			if (cudaConfig.enabled && cudaConfig.preprocessing) {
-				setStatus({ isProcessing: true, progress: 20, message: "CUDA前処理中..." });
-				
-				for (let i = 0; i < enabledImages.length; i++) {
-					const img = enabledImages[i];
-					try {
-						// FileからImageDataに変換
-						const imageData = await imageProcessor.fileToImageData(img.file);
-						
-						// CUDA前処理を適用
-						const processed = await imageProcessor.applyPreprocessing(
-							imageData,
-							cudaConfig.preprocessing
-						);
-						
-						// ImageDataをBlobに変換してFormDataに追加
-						const blob = await imageProcessor.imageDataToBlob(processed, 'image/jpeg', 0.95);
-						formData.append(`image${i + 1}`, blob, `processed_${i + 1}.jpg`);
-					} catch (error) {
-						console.error(`CUDA preprocessing failed for image ${i + 1}:`, error);
-						// 前処理失敗時は元の画像を使用
-						formData.append(`image${i + 1}`, img.file);
-					}
-				}
-			} else {
-				// CUDA前処理が無効な場合は元の画像をそのまま使用
-				enabledImages.forEach((img, index) => {
-					formData.append(`image${index + 1}`, img.file);
-				});
-			}
+			setStatus({ isProcessing: true, progress: 30, message: "ローカルAI生成中..." });
 
-			setStatus({ isProcessing: true, progress: 30, message: "AI処理中..." });
-
-			const response = await fetch("/api/generate", {
-				method: "POST",
-				body: formData,
+			// バックエンドで画像生成
+			const blob = await backend.generateImage({
+				prompt,
+				negativePrompt: negativePrompt || undefined,
+				width,
+				height,
+				steps: 4, // sd-turboは4 stepsが最適
+				guidanceScale: 0.0, // sd-turboはCFG不要
+				preferOffline: true,
+				prioritizeSpeed: false,
 			});
 
-			if (!response.ok) {
-				const error = await response.json();
-				throw new Error(error.message || "生成に失敗しました");
-			}
+			setStatus({ isProcessing: true, progress: 70, message: "画像を処理中..." });
 
-			setStatus({
-				isProcessing: true,
-				progress: 70,
-				message: "画像を受信中...",
+			// BlobをData URLに変換
+			const dataUrl = await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result as string);
+				reader.onerror = reject;
+				reader.readAsDataURL(blob);
 			});
 
-			const result = await response.json();
-			
 			// CUDA後処理を適用（動画以外）
-			if (result.type !== "video" && cudaConfig.enabled && cudaConfig.postprocessing) {
+			if (cudaConfig.enabled && cudaConfig.postprocessing) {
 				setStatus({ isProcessing: true, progress: 85, message: "CUDA後処理中..." });
 				
 				try {
-					// Base64からImageDataに変換
-					const imageData = await imageProcessor.base64ToImageData(result.image);
+					// Data URLからImageDataに変換
+					const img = new Image();
+					img.src = dataUrl;
+					await new Promise((resolve) => { img.onload = resolve; });
 					
-					// CUDA後処理を適用
-					const processed = await imageProcessor.applyPostprocessing(
-						imageData,
-						cudaConfig.postprocessing
-					);
-					
-					// ImageDataをData URLに変換
-					const dataUrl = await imageProcessor.imageDataToDataUrl(processed, 'image/png', 0.95);
-					setOutputImage(dataUrl);
+					const canvas = document.createElement('canvas');
+					canvas.width = img.width;
+					canvas.height = img.height;
+					const ctx = canvas.getContext('2d');
+					if (ctx) {
+						ctx.drawImage(img, 0, 0);
+						const imageData = ctx.getImageData(0, 0, img.width, img.height);
+						
+						// CUDA後処理を適用
+						const processed = await imageProcessor.applyPostprocessing(
+							imageData,
+							cudaConfig.postprocessing
+						);
+						
+						// ImageDataをData URLに変換
+						canvas.width = processed.width;
+						canvas.height = processed.height;
+						ctx.putImageData(processed, 0, 0);
+						setOutputImage(canvas.toDataURL('image/png', 0.95));
+					} else {
+						setOutputImage(dataUrl);
+					}
 				} catch (error) {
 					console.error('CUDA postprocessing failed:', error);
-					// 後処理失敗時は元の画像を使用
-					setOutputImage(result.image);
+					setOutputImage(dataUrl);
 				}
-			} else if (result.type === "video") {
-				setOutputVideo(result.video);
 			} else {
-				setOutputImage(result.image);
+				setOutputImage(dataUrl);
 			}
 
-			// 使用したモデル/バックエンドを表示
-			const modelName = result.model?.name || result.modelId || "不明";
-			const backendName = getBackendDisplayName(result.backend);
-			const translatedInfo = result.translated
-				? ` (翻訳: ${result.prompt})`
-				: "";
+			// バックエンド情報を表示
+			const backendName = backend.currentBackend || "不明";
 			const cudaInfo = cudaConfig.enabled ? " + CUDA処理" : "";
 
 			setStatus({
 				isProcessing: false,
 				progress: 100,
-				message: `✓ ${modelName} (${backendName}${cudaInfo}) で生成完了${translatedInfo}`,
+				message: `✓ ${backendName} (ローカル${cudaInfo}) で生成完了`,
 			});
 		} catch (error) {
 			console.error("Generation error:", error);
@@ -337,11 +342,9 @@ export default function App() {
 	}, [
 		prompt,
 		negativePrompt,
-		editMode,
-		images,
 		aspectRatio,
 		resolution,
-		selectedModelId,
+		backend,
 		cudaConfig,
 	]);
 
@@ -402,6 +405,8 @@ export default function App() {
 							models={models}
 							selectedModelId={selectedModelId}
 							backendType={backendType}
+							availableBackends={backend.availableBackends}
+							selectedBackend={selectedBackend}
 							cudaConfig={cudaConfig}
 							onPromptChange={setPrompt}
 							onNegativePromptChange={setNegativePrompt}
@@ -409,6 +414,7 @@ export default function App() {
 							onResolutionChange={setResolution}
 							onModelChange={setSelectedModelId}
 							onCudaConfigChange={setCudaConfig}
+							onBackendChange={handleBackendChange}
 							onGenerate={handleGenerate}
 							isProcessing={status.isProcessing}
 						/>
@@ -422,6 +428,7 @@ export default function App() {
 				imageCount={images.length}
 				enabledImageCount={images.filter((img) => img.enabled).length}
 				editMode={editMode}
+				backendState={backend}
 			/>
 		</div>
 	);

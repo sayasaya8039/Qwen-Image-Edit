@@ -19,6 +19,8 @@ interface PropertiesPanelProps {
 	models: ModelInfo[];
 	selectedModelId: string;
 	backendType: string;
+	availableBackends: string[];
+	selectedBackend: string | null;
 	cudaConfig: CudaProcessingConfig;
 	onPromptChange: (value: string) => void;
 	onNegativePromptChange: (value: string) => void;
@@ -26,6 +28,7 @@ interface PropertiesPanelProps {
 	onResolutionChange: (value: string) => void;
 	onModelChange: (value: string) => void;
 	onCudaConfigChange: (config: CudaProcessingConfig) => void;
+	onBackendChange: (backend: string) => void;
 	onGenerate: () => void;
 	isProcessing: boolean;
 }
@@ -45,6 +48,17 @@ const RESOLUTIONS = [
 	{ value: "768", label: "768px (中)" },
 	{ value: "1024", label: "1024px (高)" },
 	{ value: "1280", label: "1280px (超高)" },
+];
+
+
+const BACKEND_OPTIONS = [
+	{ value: 'auto', label: '自動選択' },
+	{ value: 'transformers-wasm', label: 'CPU (Wasm)' },
+	{ value: 'transformers-webgpu', label: 'WebGPU' },
+	{ value: 'transformers-webnn-wasm', label: 'WebNN + Wasm' },
+	{ value: 'custom-wasm-webgpu', label: 'Custom GPU' },
+	{ value: 'hipscript-cuda', label: 'HipScript CUDA' },
+	{ value: 'cloud', label: 'Cloud API' },
 ];
 
 const modeInfo = {
@@ -113,6 +127,8 @@ export function PropertiesPanel({
 	models,
 	selectedModelId,
 	backendType,
+	availableBackends,
+	selectedBackend,
 	cudaConfig,
 	onPromptChange,
 	onNegativePromptChange,
@@ -120,11 +136,13 @@ export function PropertiesPanel({
 	onResolutionChange,
 	onModelChange,
 	onCudaConfigChange,
+	onBackendChange,
 	onGenerate,
 	isProcessing,
 }: PropertiesPanelProps) {
 	const showResolution = backendType !== "replicate";
 	const currentMode = modeInfo[editMode];
+
 
 	// 実行可能かどうか（有効な画像数でチェック）
 	const canGenerate = (() => {
@@ -227,6 +245,39 @@ export function PropertiesPanel({
 							)}
 						</div>
 					)}
+
+					{/* バックエンド選択 */}
+					<div>
+						<label
+							htmlFor="backend-select"
+							className="block text-xs font-medium mb-2"
+						>
+							実行バックエンド
+						</label>
+						<select
+							id="backend-select"
+							className="input-field text-sm"
+							value={selectedBackend || 'auto'}
+							onChange={(e) => onBackendChange(e.target.value)}
+							disabled={isProcessing}
+						>
+							{BACKEND_OPTIONS.map((option) => (
+								<option 
+									key={option.value} 
+									value={option.value}
+									disabled={option.value !== 'auto' && !availableBackends.includes(option.value)}
+								>
+									{option.label}
+									{option.value !== 'auto' && !availableBackends.includes(option.value) ? ' (非対応)' : ''}
+								</option>
+							))}
+						</select>
+						<p className="text-xs text-[var(--ps-text-muted)] mt-1">
+							{selectedBackend === 'auto' || !selectedBackend 
+								? '最適なバックエンドを自動選択します'
+								: `${BACKEND_OPTIONS.find(o => o.value === selectedBackend)?.label} を使用`}
+						</p>
+					</div>
 
 					{/* アスペクト比と解像度 */}
 					<div className={showResolution ? "grid grid-cols-2 gap-3" : ""}>

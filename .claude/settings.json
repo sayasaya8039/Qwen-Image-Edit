@@ -2,7 +2,7 @@
   "$schema": "https://claude.ai/schemas/settings.json",
   "permissions": {
     "allow": [
-      "Bash(black *)",
+      "Bash(bolack *)",
       "Bash(bun *)",
       "Bash(bunx *)",
       "Bash(bunx playwright *)",
@@ -13,7 +13,7 @@
       "Bash(crx3 *)",
       "Bash(cursor *)",
       "Bash(eslint *)",
-      "Bash(gh *)",
+      "Bash(gh )",
       "Bash(git *)",
       "Bash(git add *)",
       "Bash(git commit *)",
@@ -70,6 +70,7 @@
       "Bash(bnmp *)",
       "Bash(zig *)",
       "Bash(sw *)",
+      "Bash(codex *)",
       "Bash(agent-browser *)"
     ],
     "deny": [
@@ -80,7 +81,8 @@
       "Bash(:(){:|:&};:)",
       "Bash(mkfs*)",
       "Bash(dd if=*)",
-      "mcp__claude-in-chrome__*"
+      "mcp__claude-in-chrome__*",
+      "mcp__codex-cli__*"
     ]
   },
   "env": {
@@ -129,7 +131,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo {\"systemMessage\":\"【Tier 0】claude-delegator: Architect/Plan Reviewer/Code Reviewer/Security Analyst | threadId受信後は codex-fetch で結果取得(UTF-8) | 日本語OK\"}"
+            "command": "echo {\\\"systemMessage\\\":\\\"【Tier 0】/codex \\\"プロンプト\\\": /architect, /plan-reviewer, /code-reviewer, /security-analyst | threadId受信後は codex-fetch で結果取得(UTF-8) | 日本語OK\\\"}"
           }
         ]
       }
@@ -140,18 +142,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo {\"systemMessage\":\"claude-delegator 使用確認: 設計・計画・レビュー・セキュリティは委任したか？\"}"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo {\"systemMessage\":\"【Tier 0 必須】claude-delegator: 設計→Architect, 計画→Plan Reviewer, コード→Code Reviewer | threadId受信→codex-fetch(UTF-8)で取得 | 日本語対応\"}"
+            "command": "echo {\\\"systemMessage\\\":\\\"\n[タスク完了前チェック - /codex 委任確認]\n  □ 設計・アーキテクチャ決定 → /architect で相談したか？\n  □ 実装計画作成 → /plan-reviewer でレビューしたか？\n  □ コード実装完了 → /code-reviewer でレビューしたか？\n  □ セキュリティ懸念 → /security-analyst で診断したか？\n\"}"
           }
         ]
       }
@@ -162,7 +153,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo {\"systemMessage\":\"コンテキスト圧縮! 【絶対忘れない】claude-delegator + codex-fetch(UTF-8) | 日本語OK\"}"
+            "command": "echo {\\\"systemMessage\\\":\\\"コンテキスト圧縮! 【絶対忘れない】/codex + codex-fetch(UTF-8) | 日本語OK\\\"}"
           }
         ]
       },
@@ -171,7 +162,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo {\"systemMessage\":\"【Tier 0】claude-delegator継続: threadId→codex-fetch(UTF-8)で本文取得 | 日本語対応\"}"
+            "command": "echo {\\\"systemMessage\\\":\\\"【Tier 0】/codex継続: threadId→codex-fetch(UTF-8)で本文取得 | 日本語対応\\\"}"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"D:/NEXTCLOUD/extensions/CLAUDE_STTING/.claude/scripts/pre-compact-save-context.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"D:/NEXTCLOUD/extensions/CLAUDE_STTING/.claude/scripts/pre-compact-save-context.sh\""
           }
         ]
       }
