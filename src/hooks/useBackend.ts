@@ -3,14 +3,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { BackendSelector } from '../lib/backends/selector';
 import { FallbackEngine, type FallbackResult } from '../lib/backends/fallback';
 import { MemoryManager } from '../lib/backends/memory-manager';
-import { TransformersWasmBackend } from '../lib/backends/transformers-wasm';
-import { TransformersWebGPUBackend } from '../lib/backends/transformers-webgpu';
+// import { TransformersWasmBackend } from '../lib/backends/transformers-wasm';
+// import { TransformersWebGPUBackend } from '../lib/backends/transformers-webgpu';
 import { CloudBackend } from '../lib/backends/cloud';
-import { TransformersWebNNWasmBackend } from '../lib/backends/transformers-webnn-wasm';
+// import { TransformersWebNNWasmBackend } from '../lib/backends/transformers-webnn-wasm';
 import { CustomWasmWebGPUBackend } from '../lib/backends/custom-wasm-webgpu';
 import { HipScriptCudaBackend } from '../lib/backends/hipscript-cuda';
 import { WorkerApiBackend } from '../lib/backends/worker-api';
-import { SDTurboBackend } from '../lib/backends/sd-turbo';
+// import { SDTurboBackend } from '../lib/backends/sd-turbo';
 import type { GenerationParams, BackendType } from '../lib/backends/types';
 
 export interface BackendState {
@@ -57,24 +57,24 @@ export function useBackend() {
         selectorRef.current = selector;
 
         // バックエンド登録
-        const wasmBackend = new TransformersWasmBackend();
-        const webgpuBackend = new TransformersWebGPUBackend();
-        const webnnWasmBackend = new TransformersWebNNWasmBackend();
+        // const wasmBackend = new TransformersWasmBackend();
+        // const webgpuBackend = new TransformersWebGPUBackend();
+        // const webnnWasmBackend = new TransformersWebNNWasmBackend();
         const customWasmWebGPUBackend = new CustomWasmWebGPUBackend();
         const hipScriptCudaBackend = new HipScriptCudaBackend();
         const cloudBackend = new CloudBackend();
         const workerApiBackend = new WorkerApiBackend();
-        const sdTurboBackend = new SDTurboBackend();
+        // const sdTurboBackend = new SDTurboBackend();
 
         await Promise.allSettled([
-          selector.registerBackend(wasmBackend),
-          selector.registerBackend(webgpuBackend),
-          selector.registerBackend(webnnWasmBackend),
+          // selector.registerBackend(wasmBackend),
+          // selector.registerBackend(webgpuBackend),
+          // selector.registerBackend(webnnWasmBackend),
           selector.registerBackend(customWasmWebGPUBackend),
           selector.registerBackend(hipScriptCudaBackend),
           selector.registerBackend(cloudBackend),
           selector.registerBackend(workerApiBackend),
-          selector.registerBackend(sdTurboBackend),
+          // selector.registerBackend(sdTurboBackend),
         ]);
 
         // デバッグ: 各バックエンドの利用可否をログ出力

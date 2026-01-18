@@ -113,6 +113,18 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
     try {
       const width = params.width || 512;
       const height = params.height || 512;
+      const seed = this.hashPrompt(params.prompt);
+      const steps = params.steps || 4;
+
+      console.log('[CustomWasmWebGPU] Generating with seed:', seed, 'from prompt:', params.prompt.substring(0, 50));
+
+      // Uniformバッファを作成（シード値とステップ数）
+      const uniformData = new Float32Array([seed, steps, 0, 0]);
+      const uniformBuffer = this.device.createBuffer({
+        size: uniformData.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      this.device.queue.writeBuffer(uniformBuffer, 0, uniformData);
 
       // 出力バッファを作成
       const outputBuffer = this.device.createBuffer({
@@ -130,6 +142,13 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
               type: 'storage',
             },
           },
+          {
+            binding: 1,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: {
+              type: 'uniform',
+            },
+          },
         ],
       });
 
@@ -141,6 +160,12 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
             binding: 0,
             resource: {
               buffer: outputBuffer,
+            },
+          },
+          {
+            binding: 1,
+            resource: {
+              buffer: uniformBuffer,
             },
           },
         ],
@@ -250,6 +275,41 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
 
     const shaderCode = `
       @group(0) @binding(0) var<storage, read_write> output: array<vec4<f32>>;
+      @group(0) @binding(1) var<uniform> uniforms: vec4<f32>; // seed, steps, unused, unused
+
+      // ノイズ生成関数（プロンプトベース）
+      fn hash(p: vec2<f32>) -> f32 {
+        let seed = uniforms.x;
+        var h = dot(p, vec2<f32>(127.1, 311.7)) + seed;
+        return fract(sin(h) * 43758.5453123);
+      }
+
+      fn noise(p: vec2<f32>) -> f32 {
+        let i = floor(p);
+        let f = fract(p);
+        let u = f * f * (3.0 - 2.0 * f);
+        
+        return mix(
+          mix(hash(i + vec2<f32>(0.0, 0.0)), hash(i + vec2<f32>(1.0, 0.0)), u.x),
+          mix(hash(i + vec2<f32>(0.0, 1.0)), hash(i + vec2<f32>(1.0, 1.0)), u.x),
+          u.y
+        );
+      }
+
+      fn fbm(p: vec2<f32>) -> f32 {
+        var value = 0.0;
+        var amplitude = 0.5;
+        var frequency = 1.0;
+        var pp = p;
+        
+        for (var i = 0; i < 6; i = i + 1) {
+          value = value + amplitude * noise(pp * frequency);
+          frequency = frequency * 2.0;
+          amplitude = amplitude * 0.5;
+        }
+        
+        return value;
+      }
 
       @compute @workgroup_size(8, 8)
       fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -258,12 +318,23 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
         let index = global_id.y * width + global_id.x;
         
         if (global_id.x < width && global_id.y < height) {
-          // 可視的なグラデーション生成（検証用）
           let x = f32(global_id.x) / f32(width);
           let y = f32(global_id.y) / f32(height);
+          let pos = vec2<f32>(x, y) * 8.0;
           
-          // R=横方向グラデーション、G=縦方向グラデーション、B=固定値
-          output[index] = vec4<f32>(x, y, 0.5, 1.0);
+          // プロンプトベースのノイズ生成
+          let seed = uniforms.x;
+          let n1 = fbm(pos + vec2<f32>(seed * 0.1, 0.0));
+          let n2 = fbm(pos + vec2<f32>(0.0, seed * 0.1));
+          let n3 = fbm(pos + vec2<f32>(seed * 0.05));
+          
+          // 色の合成（プロンプトハッシュに基づく）
+          let hue = fract(seed * 0.01);
+          let r = clamp(n1 * 0.8 + 0.2 + hue * 0.3, 0.0, 1.0);
+          let g = clamp(n2 * 0.8 + 0.2 + (1.0 - hue) * 0.3, 0.0, 1.0);
+          let b = clamp(n3 * 0.8 + 0.2 + abs(0.5 - hue) * 0.3, 0.0, 1.0);
+          
+          output[index] = vec4<f32>(r, g, b, 1.0);
         }
       }
     `;
@@ -287,6 +358,16 @@ export class CustomWasmWebGPUBackend implements BackendExecutor {
     console.log('[CustomWasmWebGPU] Processing image:', operation);
     return input;
   }
+  private hashPrompt(prompt: string): number {
+    let hash = 0;
+    for (let i = 0; i < prompt.length; i++) {
+      hash = ((hash << 5) - hash) + prompt.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash) % 10000;
+  }
+
+
 
   async dispose(): Promise<void> {
     if (this.device) {

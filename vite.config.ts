@@ -13,7 +13,7 @@ export default defineConfig({
 		},
 	},
 	optimizeDeps: {
-		exclude: ["@assemblyscript/loader", "web-txt2img", "@xenova/transformers"]
+		exclude: ["@assemblyscript/loader", "web-txt2img", "@xenova/transformers", "onnxruntime-web"]
 	},
 	assetsInclude: ['**/*.wgsl']
 });

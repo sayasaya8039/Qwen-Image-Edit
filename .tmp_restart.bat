@@ -1,0 +1,6 @@
+@echo off
+echo Cleaning cache...
+rmdir /s /q node_modules\.vite 2>nul
+rmdir /s /q dist 2>nul
+echo Starting dev server...
+bun run dev

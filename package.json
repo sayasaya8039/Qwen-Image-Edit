@@ -1,6 +1,6 @@
 {
 	"name": "qwen-image-edit",
-	"version": "2.4.1",
+	"version": "2.4.2",
 	"type": "module",
 	"scripts": {
 		"dev": "concurrently \"bun run dev:client\" \"bun run dev:server\"",
