@@ -90,10 +90,10 @@ export function useBackend() {
         });
         memoryManagerRef.current = memoryManager;
 
-        // バックエンド登録
-        for (const backend of selector.getAllBackends()) {
-          await memoryManager.registerBackend(backend);
-        }
+        // バックエンド登録（現在は使用しない）
+        // for (const backend of selector.getAllBackends()) {
+        //   await memoryManager.registerBackend(backend);
+        // }
 
         if (mounted) {
           setState({

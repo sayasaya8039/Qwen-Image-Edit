@@ -88,7 +88,6 @@ export default function App() {
 		fetchData();
 	}, []);
 
-
 	// 画像の追加（最大4枚）- WASM統合版
 	const handleAddImage = useCallback(
 		async (files: File[]) => {

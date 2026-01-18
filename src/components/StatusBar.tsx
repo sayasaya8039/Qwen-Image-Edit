@@ -125,7 +125,7 @@ function BackendIndicator({ backend, backendState, onLocalClick }: BackendIndica
 			);
 		}
 		
-		if (backendState.initialized && backendState.availableBackends.length > 0) {
+if (backendState.initialized && backendState.availableBackends.length > 0) {
 			const backend = backendState.currentBackend || backendState.availableBackends[0];
 			const backendNames: Record<string, string> = {
 				'transformers-wasm': 'CPU (Wasm)',
